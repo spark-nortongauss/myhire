@@ -1,4 +1,6 @@
+// app/api/import/route.ts
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import OpenAI from "openai";
@@ -13,37 +15,81 @@ function extractField(text: string, label: string) {
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { url } = await request.json();
+  // Auth
+  const {
+    data: { user },
+    error: authErr,
+  } = await supabase.auth.getUser();
+
+  if (authErr || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Body
+  let body: any = null;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const url = (body?.url ?? "").toString().trim();
   if (!url) return NextResponse.json({ error: "URL is required" }, { status: 400 });
 
-  const { data: importRow } = await supabase
-    .from("job_imports")
-    .insert({ user_id: user.id, source_url: url, status: "processing" })
-    .select("id")
-    .single();
+  // Create import row with guaranteed non-null id
+  const importId = randomUUID();
+  const platform = inferPlatform(url);
+
+  const { error: importErr } = await supabase.from("job_imports").insert({
+    id: importId,
+    user_id: user.id,
+    source_url: url,
+    status: "processing",
+    platform, // remove if your table doesn't have this column
+  });
+
+  if (importErr) {
+    return NextResponse.json(
+      { error: `Failed to create import row: ${importErr.message}` },
+      { status: 500 }
+    );
+  }
 
   try {
-    const html = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 MyHireBot/1.0" } }).then((r) => r.text());
-    const doc = new JSDOM(html, { url });
-    const article = new Readability(doc.window.document).parse();
-    const text = article?.textContent ?? doc.window.document.body.textContent ?? "";
+    // Fetch + parse
+    const html = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 MyHireBot/1.0" },
+      // cache: "no-store" // optional
+    }).then((r) => r.text());
 
-    const title = article?.title || doc.window.document.title || extractField(text, "Job Title") || "Untitled role";
+    const dom = new JSDOM(html, { url });
+    const article = new Readability(dom.window.document).parse();
+    const text = article?.textContent ?? dom.window.document.body?.textContent ?? "";
+
+    const title =
+      article?.title ||
+      dom.window.document.title ||
+      extractField(text, "Job Title") ||
+      "Untitled role";
+
     const company =
-      extractField(text, "Company") || extractField(text, "Employer") || doc.window.document.querySelector("meta[property='og:site_name']")?.getAttribute("content") || "Unknown";
+      extractField(text, "Company") ||
+      extractField(text, "Employer") ||
+      dom.window.document
+        .querySelector("meta[property='og:site_name']")
+        ?.getAttribute("content") ||
+      "Unknown";
+
     const location = extractField(text, "Location") || null;
     const salaryText = extractField(text, "Salary") || null;
-    const workMode = inferWorkMode(text);
-    const platform = inferPlatform(url);
-    const description = text.slice(0, 12000);
 
+    const workMode = inferWorkMode(text);
+    const description = (text || "").slice(0, 12000);
+
+    // AI insights (optional)
     let ai_insights = "(AI disabled: no key)";
-    let ai_insights_json = null;
+    let ai_insights_json: any = null;
 
     if (process.env.OPENAI_API_KEY) {
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -56,15 +102,19 @@ export async function POST(request: Request) {
             role: "user",
             content:
               "Create JSON with keys: bullet_insights (array of 5 strings), keywords (array), risk_flags (array). Job description:\n" +
-              description
-          }
-        ]
+              description,
+          },
+        ],
       });
+
       ai_insights_json = JSON.parse(completion.choices[0]?.message?.content || "{}");
-      ai_insights = (ai_insights_json.bullet_insights ?? []).map((x: string) => `• ${x}`).join("\n");
+      ai_insights = (ai_insights_json.bullet_insights ?? [])
+        .map((x: string) => `• ${x}`)
+        .join("\n");
     }
 
-    const { data: createdJob } = await supabase
+    // Create job application
+    const { data: createdJob, error: jobErr } = await supabase
       .from("job_applications")
       .insert({
         user_id: user.id,
@@ -80,23 +130,57 @@ export async function POST(request: Request) {
         salary_text: salaryText,
         ai_insights,
         ai_insights_json,
-        applied_at: new Date().toISOString()
+        // date column expects YYYY-MM-DD
+        applied_at: new Date().toISOString().slice(0, 10),
       })
       .select("id")
       .single();
 
+    if (jobErr) {
+      await supabase
+        .from("job_imports")
+        .update({ status: "failed", error_message: jobErr.message })
+        .eq("id", importId);
+
+      return NextResponse.json(
+        { error: `Failed to create job application: ${jobErr.message}` },
+        { status: 500 }
+      );
+    }
+
+    // Update import row to done using importId (NOT importRow)
+    const { error: updErr } = await supabase
+      .from("job_imports")
+      .update({
+        status: "done",
+        created_job_application_id: createdJob?.id ?? null,
+        extracted_payload: { title, company, location, salaryText },
+      })
+      .eq("id", importId);
+
+    if (updErr) {
+      // Not fatal to the job creation
+      return NextResponse.json(
+        {
+          ok: true,
+          jobId: createdJob?.id ?? null,
+          warning: `Import done but failed to update import row: ${updErr.message}`,
+        },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, jobId: createdJob?.id ?? null });
+  } catch (error) {
     await supabase
       .from("job_imports")
-      .update({ status: "done", created_job_application_id: createdJob?.id, extracted_payload: { title, company, location, salaryText } })
-      .eq("id", importRow.id);
+      .update({ status: "failed", error_message: String(error) })
+      .eq("id", importId);
 
-    return NextResponse.json({ ok: true, jobId: createdJob?.id });
-  } catch (error) {
-    await supabase.from("job_imports").update({ status: "failed", error_message: String(error) }).eq("id", importRow?.id);
     return NextResponse.json(
       {
         error:
-          "Import failed. Some websites block automated extraction. Please copy details manually in the Add Job form."
+          "Import failed. Some websites block automated extraction. Please copy details manually in the Add Job form.",
       },
       { status: 500 }
     );
