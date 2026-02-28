@@ -49,3 +49,13 @@ body {
 .text-white { color: #fff; }
 .bg-danger { background-color: rgb(var(--danger)); }
 .bg-panel { background-color: rgb(var(--panel)); }
+
+
+@keyframes modal-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-pop {
+  animation: modal-pop 180ms ease-out;
+}

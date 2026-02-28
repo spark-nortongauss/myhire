@@ -6,13 +6,13 @@ import { Globe, Menu, Moon, Sun, UserCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const labels = {
-  "en-US": { dashboard: "Dashboard", jobs: "My Jobs", settings: "Settings", logout: "Logout", title: "MyHire" },
-  "zh-CN": { dashboard: "仪表板", jobs: "职位", settings: "设置", logout: "退出", title: "MyHire" },
-  "es-ES": { dashboard: "Panel", jobs: "Empleos", settings: "Ajustes", logout: "Cerrar sesión", title: "MyHire" },
-  "fr-FR": { dashboard: "Tableau de bord", jobs: "Mes offres", settings: "Paramètres", logout: "Déconnexion", title: "MyHire" },
-  ar: { dashboard: "لوحة التحكم", jobs: "وظائفي", settings: "الإعدادات", logout: "تسجيل الخروج", title: "MyHire" },
-  "pt-BR": { dashboard: "Painel", jobs: "Minhas Vagas", settings: "Configurações", logout: "Sair", title: "MyHire" },
-  "hi-IN": { dashboard: "डैशबोर्ड", jobs: "नौकरियां", settings: "सेटिंग्स", logout: "लॉगआउट", title: "MyHire" }
+  "en-US": { dashboard: "Dashboard", jobs: "My Jobs", files: "My Files", settings: "Settings", logout: "Logout", title: "MyHire" },
+  "zh-CN": { dashboard: "仪表板", jobs: "职位", files: "我的文件", settings: "设置", logout: "退出", title: "MyHire" },
+  "es-ES": { dashboard: "Panel", jobs: "Empleos", files: "Mis archivos", settings: "Ajustes", logout: "Cerrar sesión", title: "MyHire" },
+  "fr-FR": { dashboard: "Tableau de bord", jobs: "Mes offres", files: "Mes fichiers", settings: "Paramètres", logout: "Déconnexion", title: "MyHire" },
+  ar: { dashboard: "لوحة التحكم", jobs: "وظائفي", files: "ملفاتي", settings: "الإعدادات", logout: "تسجيل الخروج", title: "MyHire" },
+  "pt-BR": { dashboard: "Painel", jobs: "Minhas Vagas", files: "Meus arquivos", settings: "Configurações", logout: "Sair", title: "MyHire" },
+  "hi-IN": { dashboard: "डैशबोर्ड", jobs: "नौकरियां", files: "मेरी फ़ाइलें", settings: "सेटिंग्स", logout: "लॉगआउट", title: "MyHire" }
 } as const;
 
 type Locale = keyof typeof labels;
@@ -52,6 +52,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
         <nav className="space-y-2">
           <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/dashboard">{collapsed ? "📊" : text.dashboard}</Link>
           <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/jobs">{collapsed ? "💼" : text.jobs}</Link>
+          <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/files">{collapsed ? "📁" : text.files}</Link>
           <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/settings">{collapsed ? "⚙️" : text.settings}</Link>
           <div className="rounded-md px-1">{logoutButton}</div>
         </nav>
