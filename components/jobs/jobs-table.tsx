@@ -185,7 +185,9 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
               <tr key={row.id} className={row.original.is_overdue ? "bg-red-50" : ""}>
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="border-t border-border px-3 py-2 align-top">
-                    {flexRender(cell.column.columnDef.cell ?? cell.column.columnDef.accessorKey, cell.getContext())}
+                    {cell.column.columnDef.cell
+                      ? flexRender(cell.column.columnDef.cell, cell.getContext())
+                      : String(cell.getValue() ?? "")}
                   </td>
                 ))}
               </tr>
