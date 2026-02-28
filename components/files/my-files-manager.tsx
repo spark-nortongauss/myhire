@@ -26,6 +26,8 @@ export function MyFilesManager({ userId }: { userId: string }) {
   const [uploading, setUploading] = useState(false);
   const createFileInputRef = useRef<HTMLInputElement>(null);
 
+  const isPdfFile = (file: File) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
   useEffect(() => {
     const stored = localStorage.getItem(cvStorageKey);
     if (!stored) return;
@@ -39,6 +41,12 @@ export function MyFilesManager({ userId }: { userId: string }) {
 
   const addVersion = async () => {
     if (!form.name.trim() && !newCvFile) return;
+
+    if (newCvFile && !isPdfFile(newCvFile)) {
+      alert("Only PDF files are allowed.");
+      return;
+    }
+
     const rowId = crypto.randomUUID();
     let filePath: string | undefined;
 
@@ -81,6 +89,11 @@ export function MyFilesManager({ userId }: { userId: string }) {
   };
 
   const uploadCvFile = async (rowId: string, file: File) => {
+    if (!isPdfFile(file)) {
+      alert("Only PDF files are allowed.");
+      return;
+    }
+
     setUploading(true);
     const path = `${userId}/cv-versions/${rowId}/${Date.now()}-${file.name}`;
     const { error } = await supabase.storage.from("job-files").upload(path, file, { upsert: true });
@@ -103,8 +116,8 @@ export function MyFilesManager({ userId }: { userId: string }) {
         <Input placeholder="Version name (e.g. Product Manager CV - Europe)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <div>
           <p className="mb-1 text-sm font-medium">Upload CV file (optional)</p>
-          <input ref={createFileInputRef} type="file" className="w-full text-sm" onChange={(e) => setNewCvFile(e.target.files?.[0] || null)} />
-          <p className="mt-1 text-xs text-muted-foreground">If you upload a file, we store it in the same job-files bucket location used for CV uploads.</p>
+          <input ref={createFileInputRef} type="file" accept="application/pdf,.pdf" className="w-full text-sm" onChange={(e) => setNewCvFile(e.target.files?.[0] || null)} />
+          <p className="mt-1 text-xs text-muted-foreground">Only PDF files are allowed. If you upload a file, we store it in the same job-files bucket location used for CV uploads.</p>
         </div>
         <Textarea
           className="min-h-24"
@@ -138,7 +151,7 @@ export function MyFilesManager({ userId }: { userId: string }) {
                 <td className="max-w-md px-3 py-2 text-slate-700">{row.summary || "-"}</td>
                 <td className="px-3 py-2 text-slate-700">{row.skills || "-"}</td>
                 <td className="px-3 py-2">
-                  <input type="file" className="w-56 text-xs" onChange={(e) => e.target.files?.[0] && uploadCvFile(row.id, e.target.files[0])} />
+                  <input type="file" accept="application/pdf,.pdf" className="w-56 text-xs" onChange={(e) => e.target.files?.[0] && uploadCvFile(row.id, e.target.files[0])} />
                   {row.filePath ? <p className="mt-1 text-xs text-emerald-700">Uploaded</p> : null}
                 </td>
                 <td className="px-3 py-2">
