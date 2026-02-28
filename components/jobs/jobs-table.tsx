@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
 
 const statusOptions: JobStatus[] = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
 
@@ -105,7 +106,15 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
           />
         )
       },
-      { accessorKey: "job_title", header: "Job Title" },
+      {
+        accessorKey: "job_title",
+        header: "Job Title",
+        cell: ({ row }) => (
+          <Link href={`/jobs/${row.original.id}`} className="font-medium text-indigo-700 hover:underline">
+            {row.original.job_title}
+          </Link>
+        )
+      },
       { accessorKey: "company_name", header: "Company" },
       {
         accessorKey: "job_url",
