@@ -6,7 +6,7 @@ export function inferPlatform(url: string): Platform {
   if (lower.includes("linkedin")) return "linkedin";
   if (lower.includes("indeed")) return "indeed";
   if (lower.includes("wellfound") || lower.includes("angel.co")) return "wellfound";
-  if (lower.includes("greenhouse") || lower.includes("lever")) return "company_site";
+  if (lower.includes("greenhouse") || lower.includes("lever")) return "other";
   return "other";
 }
 

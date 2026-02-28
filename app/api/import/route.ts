@@ -6,6 +6,14 @@ import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
 import { inferPlatform, inferWorkMode } from "@/lib/jobs";
 
+const supportedJobPlatforms = ["linkedin", "indeed", "wellfound", "other"] as const;
+
+function normalizeJobPlatform(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return supportedJobPlatforms.includes(normalized as (typeof supportedJobPlatforms)[number]) ? normalized : null;
+}
+
 function extractField(text: string, label: string) {
   const regex = new RegExp(`${label}\\s*[:|-]\\s*([^\\n]+)`, "i");
   const match = text.match(regex);
@@ -94,7 +102,7 @@ export async function POST(request: Request) {
           {
             role: "user",
             content:
-              "Return JSON with keys: title, company, location, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|wellfound|company_site|other), brief_description(max 300 chars), keywords(array). Input:\n" +
+              "Return JSON with keys: title, company, location, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|wellfound|other), brief_description(max 300 chars), keywords(array). Input:\n" +
               description
           }
         ]
@@ -140,7 +148,7 @@ export async function POST(request: Request) {
         job_description: description,
         brief_description: aiSummary.brief_description || description.slice(0, 400),
         job_url: url || null,
-        platform: aiSummary.platform || platform,
+        platform: normalizeJobPlatform(aiSummary.platform) ?? normalizeJobPlatform(platform),
         work_mode: aiWorkMode,
         location: aiSummary.location || location,
         salary_text: salaryText,
