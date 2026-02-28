@@ -24,6 +24,12 @@ const toLabel = (value?: string | null) => {
   return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
+const getMatchScore = (data: any) => {
+  const parsed = Number(data?.match_score ?? data?.ai_insights_json?.match_score ?? Number.NaN);
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+};
+
 export default async function JobDetailsPage({ params }: { params: { id: string } }) {
   const supabase = await createClient();
   const {
@@ -33,6 +39,7 @@ export default async function JobDetailsPage({ params }: { params: { id: string 
   const { data } = await supabase.from("v_job_applications_enriched").select("*").eq("id", params.id).eq("user_id", user!.id).maybeSingle();
 
   if (!data) return notFound();
+  const matchScore = getMatchScore(data);
 
   const summaryItems = [
     { label: "Platform", value: toLabel(data.platform) },
@@ -40,7 +47,8 @@ export default async function JobDetailsPage({ params }: { params: { id: string 
     { label: "Industry", value: data.industry || "Not specified" },
     { label: "Location", value: data.location || "Not specified" },
     { label: "Last update", value: data.status_updated_at ? new Date(data.status_updated_at).toLocaleDateString() : "Not updated yet" },
-    { label: "Applied", value: data.applied_at ? new Date(data.applied_at).toLocaleDateString() : "Not set" }
+    { label: "Applied", value: data.applied_at ? new Date(data.applied_at).toLocaleDateString() : "Not set" },
+    { label: "CV version", value: data.ai_insights_json?.cv_version_name || "Default CV" }
   ];
 
   return (
@@ -61,6 +69,9 @@ export default async function JobDetailsPage({ params }: { params: { id: string 
               <Badge className={statusTone[data.status] ?? "bg-muted"}>{toLabel(data.status)}</Badge>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Badge className={matchScore != null && matchScore >= 75 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}>
+                AI profile match: {matchScore == null ? "Not scored" : `${matchScore}%`}
+              </Badge>
               {data.job_url ? (
                 <a href={data.job_url} target="_blank" rel="noreferrer" className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white">
                   Open original listing

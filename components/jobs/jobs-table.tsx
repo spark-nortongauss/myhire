@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
+import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { JobApplication, JobStatus } from "@/types/db";
+import type { JobStatus } from "@/types/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -12,8 +13,32 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 
 const statusOptions: JobStatus[] = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
+const cvStorageKey = "myhire-cv-versions";
+
+type CvVersion = {
+  id: string;
+  name: string;
+  summary: string;
+  skills: string;
+  isDefault?: boolean;
+  createdAt: string;
+};
 
 const today = new Date().toISOString().slice(0, 10);
+
+const getMatchScore = (row: any) => {
+  const raw = row.match_score ?? row.ai_insights_json?.match_score ?? null;
+  const parsed = Number(raw);
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+};
+
+const getScoreTone = (score: number | null) => {
+  if (score == null) return "bg-slate-100 text-slate-700";
+  if (score >= 80) return "bg-emerald-100 text-emerald-700";
+  if (score >= 60) return "bg-amber-100 text-amber-700";
+  return "bg-rose-100 text-rose-700";
+};
 
 export function JobsTable({ initialData, userId }: { initialData: any[]; userId: string }) {
   const supabase = createClient();
@@ -21,10 +46,21 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState({ title: "", company: "", status: "", platform: "", work_mode: "" });
   const [open, setOpen] = useState(false);
+  const [entryMode, setEntryMode] = useState<"url" | "manual">("url");
   const [sourceUrl, setSourceUrl] = useState("");
   const [pageContent, setPageContent] = useState("");
+  const [selectedCvId, setSelectedCvId] = useState("");
+  const [cvVersions, setCvVersions] = useState<CvVersion[]>([]);
   const [pending, startTransition] = useTransition();
-  const [manual, setManual] = useState<Partial<JobApplication>>({ status: "applied", applied_at: today });
+
+  useEffect(() => {
+    const stored = localStorage.getItem(cvStorageKey);
+    if (!stored) return;
+    const parsed = JSON.parse(stored) as CvVersion[];
+    setCvVersions(parsed);
+    const defaultCv = parsed.find((item) => item.isDefault) ?? parsed[0];
+    if (defaultCv) setSelectedCvId(defaultCv.id);
+  }, []);
 
   const refresh = async () => {
     const { data: rows } = await supabase.from("v_job_applications_enriched").select("*").order("applied_at", { ascending: false });
@@ -45,28 +81,45 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
     setSelectedIds([]);
   };
 
-  const createManual = async () => {
-    await supabase.from("job_applications").insert({ ...manual, user_id: userId, applied_at: today });
-    setOpen(false);
-    setManual({ status: "applied", applied_at: today });
-    refresh();
-  };
-
   const importText = async () => {
-    const res = await fetch("/api/import", { method: "POST", body: JSON.stringify({ url: sourceUrl, content: pageContent }) });
-    if (!res.ok) alert("AI import failed. Please complete manual entry.");
+    const selectedCv = cvVersions.find((item) => item.id === selectedCvId);
+    const res = await fetch("/api/import", {
+      method: "POST",
+      body: JSON.stringify({
+        url: sourceUrl,
+        content: entryMode === "manual" ? pageContent : "",
+        cvText: selectedCv ? `${selectedCv.summary}\n${selectedCv.skills}` : ""
+      })
+    });
+
+    const payload = await res.json();
+    if (!res.ok || !payload?.jobId) return alert(payload.error || "AI import failed.");
+
+    if (selectedCv) {
+      const { data: jobRow } = await supabase.from("job_applications").select("ai_insights_json").eq("id", payload.jobId).maybeSingle();
+      await supabase
+        .from("job_applications")
+        .update({
+          ai_insights_json: {
+            ...(jobRow?.ai_insights_json ?? {}),
+            cv_version_id: selectedCv.id,
+            cv_version_name: selectedCv.name
+          }
+        })
+        .eq("id", payload.jobId);
+    }
+
     setOpen(false);
     setSourceUrl("");
     setPageContent("");
     refresh();
   };
 
-  const uploadFile = async (jobId: string, kind: "cv" | "cover-letter", file: File) => {
-    const path = `${userId}/${kind}/${jobId}/${Date.now()}-${file.name}`;
+  const uploadCoverLetter = async (jobId: string, file: File) => {
+    const path = `${userId}/cover-letter/${jobId}/${Date.now()}-${file.name}`;
     const { error } = await supabase.storage.from("job-files").upload(path, file, { upsert: true });
     if (error) return alert(error.message);
-    const updates = kind === "cv" ? { cv_file_path: path } : { cover_letter_file_path: path };
-    await supabase.from("job_applications").update(updates).eq("id", jobId);
+    await supabase.from("job_applications").update({ cover_letter_file_path: path }).eq("id", jobId);
     refresh();
   };
 
@@ -117,6 +170,19 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
       },
       { accessorKey: "company_name", header: "Company" },
       {
+        id: "match_score",
+        header: "AI Match",
+        cell: ({ row }) => {
+          const score = getMatchScore(row.original);
+          return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${getScoreTone(score)}`}>{score == null ? "Not scored" : `${score}%`}</span>;
+        }
+      },
+      {
+        id: "cv_version",
+        header: "CV Version",
+        cell: ({ row }) => row.original.ai_insights_json?.cv_version_name || "Default CV"
+      },
+      {
         accessorKey: "job_url",
         header: "Job URL",
         cell: ({ row }) =>
@@ -139,8 +205,6 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
           </Select>
         )
       },
-      { accessorKey: "platform", header: "Platform" },
-      { accessorKey: "work_mode", header: "Work Mode" },
       {
         accessorKey: "days_since_applied",
         header: "Days Since Applied",
@@ -148,14 +212,13 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
       },
       {
         accessorKey: "files",
-        header: "Files",
+        header: "Cover Letter",
         cell: ({ row }) => (
-          <div className="flex gap-1">
-            <input type="file" className="w-24 text-xs" onChange={(e) => e.target.files?.[0] && uploadFile(row.original.id, "cv", e.target.files[0])} />
-            <input type="file" className="w-28 text-xs" onChange={(e) => e.target.files?.[0] && uploadFile(row.original.id, "cover-letter", e.target.files[0])} />
-            {row.original.cv_file_path ? (
-              <Button variant="ghost" onClick={() => downloadFile(row.original.cv_file_path)}>
-                CV
+          <div className="flex items-center gap-1">
+            <input type="file" className="w-28 text-xs" onChange={(e) => e.target.files?.[0] && uploadCoverLetter(row.original.id, e.target.files[0])} />
+            {row.original.cover_letter_file_path ? (
+              <Button variant="ghost" onClick={() => downloadFile(row.original.cover_letter_file_path)}>
+                Open
               </Button>
             ) : null}
           </div>
@@ -175,6 +238,20 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
 
   return (
     <div className="space-y-4">
+      <div className="card relative overflow-hidden border-indigo-100">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-cyan-400/5 to-fuchsia-500/10" />
+        <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-500">AI Hiring Assistant</p>
+            <h3 className="text-lg font-semibold">Smart matching + CV version control</h3>
+          </div>
+          <Button className="group" onClick={() => setOpen(true)}>
+            <Sparkles size={15} className="mr-2 transition group-hover:rotate-12" />
+            Add New Application
+          </Button>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <Input placeholder="Job title" value={filter.title} onChange={(e) => setFilter({ ...filter, title: e.target.value })} className="w-40" />
         <Input placeholder="Company" value={filter.company} onChange={(e) => setFilter({ ...filter, company: e.target.value })} className="w-40" />
@@ -184,27 +261,12 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
             <option key={s}>{s}</option>
           ))}
         </Select>
-        <Select value={filter.platform} onChange={(e) => setFilter({ ...filter, platform: e.target.value })} className="w-40">
-          <option value="">All platform</option>
-          <option>linkedin</option>
-          <option>indeed</option>
-          <option>wellfound</option>
-          <option>company_site</option>
-          <option>other</option>
-        </Select>
-        <Select value={filter.work_mode} onChange={(e) => setFilter({ ...filter, work_mode: e.target.value })} className="w-40">
-          <option value="">All mode</option>
-          <option>remote</option>
-          <option>hybrid</option>
-          <option>on_site</option>
-        </Select>
-        <Button onClick={() => setOpen(true)}>Add Job</Button>
         <Button variant="danger" disabled={!selectedIds.length} onClick={deleteSelected}>
           Delete Selected ({selectedIds.length})
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-muted">
             {table.getHeaderGroups().map((hg) => (
@@ -219,7 +281,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className={row.original.is_overdue ? "bg-red-50" : ""}>
+              <tr key={row.id} className={`transition-colors hover:bg-indigo-50/40 ${row.original.is_overdue ? "bg-red-50" : ""}`}>
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="border-t border-border px-3 py-2 align-top">
                     {cell.column.columnDef.cell ? flexRender(cell.column.columnDef.cell, cell.getContext()) : String(cell.getValue() ?? "")}
@@ -231,28 +293,44 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
         </table>
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Add Job">
-        <div className="space-y-3">
-          <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="Job URL (optional)" />
-          <Textarea value={pageContent} onChange={(e) => setPageContent(e.target.value)} className="min-h-40" placeholder="Paste full job webpage content here..." />
-          <Button disabled={pending || !pageContent.trim()} onClick={() => startTransition(importText)}>
-            Analyze with AI and Create Job
-          </Button>
-        </div>
-        <div className="mt-5 border-t border-border pt-4">
-          <p className="mb-2 text-sm font-medium">Fallback manual entry</p>
-          <div className="grid gap-2">
-            <Input placeholder="Job title" onChange={(e) => setManual({ ...manual, job_title: e.target.value })} />
-            <Input placeholder="Company" onChange={(e) => setManual({ ...manual, company_name: e.target.value })} />
-            <Input placeholder="Job URL" onChange={(e) => setManual({ ...manual, job_url: e.target.value })} />
-            <Input type="date" value={today} disabled />
-            <Select onChange={(e) => setManual({ ...manual, status: e.target.value as JobStatus })}>
-              {statusOptions.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </Select>
-            <Textarea placeholder="Brief description" onChange={(e) => setManual({ ...manual, brief_description: e.target.value })} />
-            <Button onClick={createManual}>Create Job Manually</Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Add New Application">
+        <div className="space-y-4">
+          <div className="inline-flex rounded-lg bg-slate-100 p-1 text-sm">
+            <button onClick={() => setEntryMode("url")} className={`rounded-md px-3 py-1 ${entryMode === "url" ? "bg-white shadow" : ""}`}>
+              URL scraper
+            </button>
+            <button onClick={() => setEntryMode("manual")} className={`rounded-md px-3 py-1 ${entryMode === "manual" ? "bg-white shadow" : ""}`}>
+              Add manually
+            </button>
+          </div>
+
+          <div className="grid gap-3">
+            <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="Job URL" />
+            {entryMode === "manual" ? (
+              <Textarea
+                value={pageContent}
+                onChange={(e) => setPageContent(e.target.value)}
+                className="min-h-44"
+                placeholder="Paste the full job post content. AI will extract title, company, location and description."
+              />
+            ) : (
+              <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">We will scrape the URL and auto-fill all job information using AI.</p>
+            )}
+            <div>
+              <p className="mb-1 text-sm font-medium">CV version for this application</p>
+              <Select value={selectedCvId} onChange={(e) => setSelectedCvId(e.target.value)}>
+                <option value="">No CV profile selected</option>
+                {cvVersions.map((cv) => (
+                  <option key={cv.id} value={cv.id}>
+                    {cv.name}
+                    {cv.isDefault ? " (default)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <Button disabled={pending || (!sourceUrl.trim() && !pageContent.trim())} onClick={() => startTransition(importText)}>
+              {pending ? "Analyzing..." : "Analyze with AI & create application"}
+            </Button>
           </div>
         </div>
       </Modal>

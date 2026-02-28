@@ -30,6 +30,7 @@ export async function POST(request: Request) {
 
   const url = (body?.url ?? "").toString().trim();
   const content = (body?.content ?? "").toString().trim();
+  const cvText = (body?.cvText ?? "").toString().trim();
   if (!url && !content) return NextResponse.json({ error: "Provide a URL or page content" }, { status: 400 });
 
   const importId = randomUUID();
@@ -75,7 +76,9 @@ export async function POST(request: Request) {
       work_mode: workMode,
       platform,
       brief_description: description.slice(0, 400),
-      keywords: [] as string[]
+      keywords: [] as string[],
+      match_score: null as number | null,
+      match_summary: ""
     };
 
     const userApiKey = user.user_metadata?.openai_api_key as string | undefined;
@@ -98,6 +101,29 @@ export async function POST(request: Request) {
       });
 
       aiSummary = { ...aiSummary, ...JSON.parse(completion.choices[0]?.message?.content || "{}") };
+
+      if (cvText) {
+        const matchCompletion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: "You are a strict talent reviewer. Return concise JSON only."
+            },
+            {
+              role: "user",
+              content:
+                "Given CV profile text and a job description, return JSON with keys: match_score(number from 0 to 100), match_summary(max 280 chars), strengths(array max 4), gaps(array max 4).\n\nCV:\n" +
+                cvText.slice(0, 8000) +
+                "\n\nJOB:\n" +
+                description.slice(0, 8000)
+            }
+          ]
+        });
+
+        aiSummary = { ...aiSummary, ...JSON.parse(matchCompletion.choices[0]?.message?.content || "{}") };
+      }
     }
 
     const aiWorkMode = ["remote", "hybrid", "on_site"].includes(String(aiSummary.work_mode))
