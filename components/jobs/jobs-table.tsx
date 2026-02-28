@@ -1,17 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable
-} from "@tanstack/react-table";
+import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
 import { createClient } from "@/lib/supabase/client";
-import type { JobApplication, JobStatus, Platform, WorkMode } from "@/types/db";
-import { Badge } from "@/components/ui/badge";
+import type { JobApplication, JobStatus } from "@/types/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -20,19 +12,23 @@ import { Textarea } from "@/components/ui/textarea";
 
 const statusOptions: JobStatus[] = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
 
+const today = new Date().toISOString().slice(0, 10);
+
 export function JobsTable({ initialData, userId }: { initialData: any[]; userId: string }) {
   const supabase = createClient();
   const [data, setData] = useState<any[]>(initialData);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState({ title: "", company: "", status: "", platform: "", work_mode: "" });
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"url" | "manual">("url");
-  const [url, setUrl] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [pageContent, setPageContent] = useState("");
   const [pending, startTransition] = useTransition();
-  const [manual, setManual] = useState<Partial<JobApplication>>({ status: "applied" });
+  const [manual, setManual] = useState<Partial<JobApplication>>({ status: "applied", applied_at: today });
 
   const refresh = async () => {
     const { data: rows } = await supabase.from("v_job_applications_enriched").select("*").order("applied_at", { ascending: false });
     setData(rows ?? []);
+    setSelectedIds([]);
   };
 
   const updateStatus = async (id: string, status: string) => {
@@ -40,18 +36,27 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
     refresh();
   };
 
+  const deleteSelected = async () => {
+    if (!selectedIds.length) return;
+    const { error } = await supabase.from("job_applications").delete().in("id", selectedIds);
+    if (error) return alert(error.message);
+    setData((prev) => prev.filter((row) => !selectedIds.includes(row.id)));
+    setSelectedIds([]);
+  };
+
   const createManual = async () => {
-    await supabase.from("job_applications").insert({ ...manual, user_id: userId });
+    await supabase.from("job_applications").insert({ ...manual, user_id: userId, applied_at: today });
     setOpen(false);
-    setManual({ status: "applied" });
+    setManual({ status: "applied", applied_at: today });
     refresh();
   };
 
-  const importUrl = async () => {
-    const res = await fetch("/api/import", { method: "POST", body: JSON.stringify({ url }) });
-    if (!res.ok) alert("Import failed. Site may block scraping. Please add manually.");
+  const importText = async () => {
+    const res = await fetch("/api/import", { method: "POST", body: JSON.stringify({ url: sourceUrl, content: pageContent }) });
+    if (!res.ok) alert("AI import failed. Please complete manual entry.");
     setOpen(false);
-    setUrl("");
+    setSourceUrl("");
+    setPageContent("");
     refresh();
   };
 
@@ -86,8 +91,34 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
 
   const columns = useMemo<ColumnDef<any>[]>(
     () => [
+      {
+        id: "select",
+        header: () => <span className="sr-only">Select</span>,
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(row.original.id)}
+            onChange={(e) => {
+              if (e.target.checked) setSelectedIds((prev) => [...new Set([...prev, row.original.id])]);
+              else setSelectedIds((prev) => prev.filter((id) => id !== row.original.id));
+            }}
+          />
+        )
+      },
       { accessorKey: "job_title", header: "Job Title" },
       { accessorKey: "company_name", header: "Company" },
+      {
+        accessorKey: "job_url",
+        header: "Job URL",
+        cell: ({ row }) =>
+          row.original.job_url ? (
+            <a href={row.original.job_url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">
+              Open link
+            </a>
+          ) : (
+            "-"
+          )
+      },
       {
         accessorKey: "status",
         header: "Status",
@@ -104,9 +135,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
       {
         accessorKey: "days_since_applied",
         header: "Days Since Applied",
-        cell: ({ row }) => (
-          <span className={row.original.is_overdue ? "font-semibold text-red-600" : ""}>{row.original.days_since_applied ?? "-"}</span>
-        )
+        cell: ({ row }) => <span className={row.original.is_overdue ? "font-semibold text-red-600" : ""}>{row.original.days_since_applied ?? "-"}</span>
       },
       {
         accessorKey: "files",
@@ -114,11 +143,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
         cell: ({ row }) => (
           <div className="flex gap-1">
             <input type="file" className="w-24 text-xs" onChange={(e) => e.target.files?.[0] && uploadFile(row.original.id, "cv", e.target.files[0])} />
-            <input
-              type="file"
-              className="w-28 text-xs"
-              onChange={(e) => e.target.files?.[0] && uploadFile(row.original.id, "cover-letter", e.target.files[0])}
-            />
+            <input type="file" className="w-28 text-xs" onChange={(e) => e.target.files?.[0] && uploadFile(row.original.id, "cover-letter", e.target.files[0])} />
             {row.original.cv_file_path ? (
               <Button variant="ghost" onClick={() => downloadFile(row.original.cv_file_path)}>
                 CV
@@ -128,7 +153,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
         )
       }
     ],
-    []
+    [selectedIds]
   );
 
   const table = useReactTable({
@@ -165,6 +190,9 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
           <option>on_site</option>
         </Select>
         <Button onClick={() => setOpen(true)}>Add Job</Button>
+        <Button variant="danger" disabled={!selectedIds.length} onClick={deleteSelected}>
+          Delete Selected ({selectedIds.length})
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border bg-white">
@@ -185,9 +213,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
               <tr key={row.id} className={row.original.is_overdue ? "bg-red-50" : ""}>
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="border-t border-border px-3 py-2 align-top">
-                    {cell.column.columnDef.cell
-                      ? flexRender(cell.column.columnDef.cell, cell.getContext())
-                      : String(cell.getValue() ?? "")}
+                    {cell.column.columnDef.cell ? flexRender(cell.column.columnDef.cell, cell.getContext()) : String(cell.getValue() ?? "")}
                   </td>
                 ))}
               </tr>
@@ -197,31 +223,29 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Add Job">
-        <div className="mb-3 flex gap-2">
-          <Button variant={tab === "url" ? "default" : "outline"} onClick={() => setTab("url")}>Paste URL</Button>
-          <Button variant={tab === "manual" ? "default" : "outline"} onClick={() => setTab("manual")}>Manual Entry</Button>
+        <div className="space-y-3">
+          <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="Job URL (optional)" />
+          <Textarea value={pageContent} onChange={(e) => setPageContent(e.target.value)} className="min-h-40" placeholder="Paste full job webpage content here..." />
+          <Button disabled={pending || !pageContent.trim()} onClick={() => startTransition(importText)}>
+            Analyze with AI and Create Job
+          </Button>
         </div>
-        {tab === "url" ? (
-          <div className="space-y-3">
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
-            <Button disabled={pending} onClick={() => startTransition(importUrl)}>
-              Import from URL
-            </Button>
-          </div>
-        ) : (
+        <div className="mt-5 border-t border-border pt-4">
+          <p className="mb-2 text-sm font-medium">Fallback manual entry</p>
           <div className="grid gap-2">
             <Input placeholder="Job title" onChange={(e) => setManual({ ...manual, job_title: e.target.value })} />
             <Input placeholder="Company" onChange={(e) => setManual({ ...manual, company_name: e.target.value })} />
-            <Input type="date" onChange={(e) => setManual({ ...manual, applied_at: e.target.value })} />
+            <Input placeholder="Job URL" onChange={(e) => setManual({ ...manual, job_url: e.target.value })} />
+            <Input type="date" value={today} disabled />
             <Select onChange={(e) => setManual({ ...manual, status: e.target.value as JobStatus })}>
               {statusOptions.map((s) => (
                 <option key={s}>{s}</option>
               ))}
             </Select>
             <Textarea placeholder="Brief description" onChange={(e) => setManual({ ...manual, brief_description: e.target.value })} />
-            <Button onClick={createManual}>Create Job</Button>
+            <Button onClick={createManual}>Create Job Manually</Button>
           </div>
-        )}
+        </div>
       </Modal>
     </div>
   );
