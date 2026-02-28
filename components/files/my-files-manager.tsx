@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,9 @@ export function MyFilesManager({ userId }: { userId: string }) {
   const supabase = createClient();
   const [rows, setRows] = useState<CvVersion[]>([]);
   const [form, setForm] = useState({ name: "", summary: "", skills: "" });
+  const [newCvFile, setNewCvFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const createFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(cvStorageKey);
@@ -35,14 +37,28 @@ export function MyFilesManager({ userId }: { userId: string }) {
     localStorage.setItem(cvStorageKey, JSON.stringify(next));
   };
 
-  const addVersion = () => {
-    if (!form.name.trim()) return;
+  const addVersion = async () => {
+    if (!form.name.trim() && !newCvFile) return;
+    const rowId = crypto.randomUUID();
+    let filePath: string | undefined;
+
+    if (newCvFile) {
+      setUploading(true);
+      const path = `${userId}/cv-versions/${rowId}/${Date.now()}-${newCvFile.name}`;
+      const { error } = await supabase.storage.from("job-files").upload(path, newCvFile, { upsert: true });
+      setUploading(false);
+      if (error) return alert(error.message);
+      filePath = path;
+    }
+
+    const fallbackName = newCvFile?.name.replace(/\.[^.]+$/, "") || "Uploaded CV";
     const next: CvVersion[] = [
       {
-        id: crypto.randomUUID(),
-        name: form.name.trim(),
+        id: rowId,
+        name: form.name.trim() || fallbackName,
         summary: form.summary.trim(),
         skills: form.skills.trim(),
+        filePath,
         isDefault: rows.length === 0,
         createdAt: new Date().toISOString()
       },
@@ -50,6 +66,8 @@ export function MyFilesManager({ userId }: { userId: string }) {
     ];
     saveRows(next);
     setForm({ name: "", summary: "", skills: "" });
+    setNewCvFile(null);
+    if (createFileInputRef.current) createFileInputRef.current.value = "";
   };
 
   const setDefault = (id: string) => {
@@ -83,6 +101,11 @@ export function MyFilesManager({ userId }: { userId: string }) {
       <div className="card space-y-3">
         <h2 className="text-lg font-semibold">Create a new CV version</h2>
         <Input placeholder="Version name (e.g. Product Manager CV - Europe)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <div>
+          <p className="mb-1 text-sm font-medium">Upload CV file (optional)</p>
+          <input ref={createFileInputRef} type="file" className="w-full text-sm" onChange={(e) => setNewCvFile(e.target.files?.[0] || null)} />
+          <p className="mt-1 text-xs text-muted-foreground">If you upload a file, we store it in the same job-files bucket location used for CV uploads.</p>
+        </div>
         <Textarea
           className="min-h-24"
           placeholder="Profile summary used by AI matching (experience, domain, strengths)."
@@ -90,7 +113,9 @@ export function MyFilesManager({ userId }: { userId: string }) {
           onChange={(e) => setForm({ ...form, summary: e.target.value })}
         />
         <Textarea className="min-h-20" placeholder="Core skills (comma separated)." value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} />
-        <Button onClick={addVersion}>Save CV Version</Button>
+        <Button onClick={() => void addVersion()} disabled={uploading || (!form.name.trim() && !newCvFile)}>
+          Save CV Version
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
