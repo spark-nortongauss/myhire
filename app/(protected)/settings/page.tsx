@@ -58,7 +58,6 @@ export default function SettingsPage() {
             <option>linkedin</option>
             <option>indeed</option>
             <option>wellfound</option>
-            <option>company_site</option>
             <option>other</option>
           </Select>
         </div>
