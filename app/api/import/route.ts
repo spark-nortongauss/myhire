@@ -16,18 +16,18 @@ function extractField(text: string, label: string) {
 export async function POST(request: Request) {
   const supabase = await createClient();
 
-  // 1) Auth
+  // Auth
   const {
     data: { user },
-    error: userErr
+    error: authErr,
   } = await supabase.auth.getUser();
 
-  if (userErr || !user) {
+  if (authErr || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 2) Input
-  let body: any;
+  // Body
+  let body: any = null;
   try {
     body = await request.json();
   } catch {
@@ -37,15 +37,16 @@ export async function POST(request: Request) {
   const url = (body?.url ?? "").toString().trim();
   if (!url) return NextResponse.json({ error: "URL is required" }, { status: 400 });
 
-  // 3) Create import row with guaranteed ID (fixes: importRow possibly null)
+  // Create import row with guaranteed non-null id
   const importId = randomUUID();
+  const platform = inferPlatform(url);
 
   const { error: importErr } = await supabase.from("job_imports").insert({
     id: importId,
     user_id: user.id,
     source_url: url,
     status: "processing",
-    platform: inferPlatform(url) // if your table has this column; if not, remove this line
+    platform, // remove if your table doesn't have this column
   });
 
   if (importErr) {
@@ -56,17 +57,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 4) Fetch + extract readable text
+    // Fetch + parse
     const html = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 MyHireBot/1.0" }
+      headers: { "User-Agent": "Mozilla/5.0 MyHireBot/1.0" },
+      // cache: "no-store" // optional
     }).then((r) => r.text());
 
     const dom = new JSDOM(html, { url });
     const article = new Readability(dom.window.document).parse();
-    const text =
-      article?.textContent ??
-      dom.window.document.body?.textContent ??
-      "";
+    const text = article?.textContent ?? dom.window.document.body?.textContent ?? "";
 
     const title =
       article?.title ||
@@ -86,10 +85,9 @@ export async function POST(request: Request) {
     const salaryText = extractField(text, "Salary") || null;
 
     const workMode = inferWorkMode(text);
-    const platform = inferPlatform(url);
     const description = (text || "").slice(0, 12000);
 
-    // 5) Optional AI insights
+    // AI insights (optional)
     let ai_insights = "(AI disabled: no key)";
     let ai_insights_json: any = null;
 
@@ -104,9 +102,9 @@ export async function POST(request: Request) {
             role: "user",
             content:
               "Create JSON with keys: bullet_insights (array of 5 strings), keywords (array), risk_flags (array). Job description:\n" +
-              description
-          }
-        ]
+              description,
+          },
+        ],
       });
 
       ai_insights_json = JSON.parse(completion.choices[0]?.message?.content || "{}");
@@ -115,7 +113,7 @@ export async function POST(request: Request) {
         .join("\n");
     }
 
-    // 6) Create job application row
+    // Create job application
     const { data: createdJob, error: jobErr } = await supabase
       .from("job_applications")
       .insert({
@@ -132,14 +130,13 @@ export async function POST(request: Request) {
         salary_text: salaryText,
         ai_insights,
         ai_insights_json,
-        // If your column type is DATE, prefer YYYY-MM-DD:
-        applied_at: new Date().toISOString().slice(0, 10)
+        // date column expects YYYY-MM-DD
+        applied_at: new Date().toISOString().slice(0, 10),
       })
       .select("id")
       .single();
 
     if (jobErr) {
-      // Update import row to failed and return
       await supabase
         .from("job_imports")
         .update({ status: "failed", error_message: jobErr.message })
@@ -151,23 +148,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // 7) Update import row to done (use importId, not importRow.id)
+    // Update import row to done using importId (NOT importRow)
     const { error: updErr } = await supabase
       .from("job_imports")
       .update({
         status: "done",
         created_job_application_id: createdJob?.id ?? null,
-        extracted_payload: { title, company, location, salaryText }
+        extracted_payload: { title, company, location, salaryText },
       })
       .eq("id", importId);
 
     if (updErr) {
-      // Not fatal, but good to report
+      // Not fatal to the job creation
       return NextResponse.json(
         {
           ok: true,
           jobId: createdJob?.id ?? null,
-          warning: `Import created but failed to update import row: ${updErr.message}`
+          warning: `Import done but failed to update import row: ${updErr.message}`,
         },
         { status: 200 }
       );
@@ -183,7 +180,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Import failed. Some websites block automated extraction. Please copy details manually in the Add Job form."
+          "Import failed. Some websites block automated extraction. Please copy details manually in the Add Job form.",
       },
       { status: 500 }
     );
