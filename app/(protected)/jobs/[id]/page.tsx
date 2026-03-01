@@ -25,7 +25,7 @@ const toLabel = (value?: string | null) => {
 };
 
 const getMatchScore = (data: any) => {
-  const parsed = Number(data?.match_score ?? data?.ai_insights_json?.match_score ?? Number.NaN);
+  const parsed = Number(data?.ai_insights_json?.match_score ?? data?.match_score ?? Number.NaN);
   if (Number.isNaN(parsed)) return null;
   return Math.max(0, Math.min(100, Math.round(parsed)));
 };

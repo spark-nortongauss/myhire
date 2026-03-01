@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Globe, Menu, Moon, Sun, UserCircle2, X } from "lucide-react";
+import { BriefcaseBusiness, ChevronLeft, ChevronRight, FolderOpen, Globe, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const labels = {
@@ -40,12 +40,25 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
   }, [locale]);
 
   const text = useMemo(() => labels[locale], [locale]);
+  const navItems = [
+    { href: "/dashboard", icon: LayoutDashboard, label: text.dashboard },
+    { href: "/jobs", icon: BriefcaseBusiness, label: text.jobs },
+    { href: "/files", icon: FolderOpen, label: text.files },
+    { href: "/settings", icon: Settings, label: text.settings }
+  ];
   const navLinks = (
     <>
-      <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/dashboard" onClick={() => setMobileNavOpen(false)}>{collapsed ? "📊" : text.dashboard}</Link>
-      <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/jobs" onClick={() => setMobileNavOpen(false)}>{collapsed ? "💼" : text.jobs}</Link>
-      <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/files" onClick={() => setMobileNavOpen(false)}>{collapsed ? "📁" : text.files}</Link>
-      <Link className="block rounded-md px-3 py-2 hover:bg-muted" href="/settings" onClick={() => setMobileNavOpen(false)}>{collapsed ? "⚙️" : text.settings}</Link>
+      {navItems.map((item) => (
+        <Link
+          key={item.href}
+          className={`flex items-center rounded-md px-3 py-2 hover:bg-muted ${collapsed ? "justify-center" : "gap-2"}`}
+          href={item.href}
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <item.icon size={18} />
+          {!collapsed ? <span>{item.label}</span> : null}
+        </Link>
+      ))}
     </>
   );
 
@@ -56,14 +69,14 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
       <aside
         className={`fixed inset-y-0 left-0 z-40 border-r border-border/50 bg-panel/80 p-4 backdrop-blur transition-all md:static md:z-0 ${
           collapsed ? "md:w-20" : "md:w-64"
-        } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} w-64`}
+        } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} ${collapsed ? "w-20" : "w-64"}`}
       >
         <div className="mb-6 flex items-center justify-between">
           {!collapsed ? <h2 className="bg-gradient-to-r from-indigo-500 to-cyan-400 bg-clip-text text-xl font-extrabold text-transparent">{text.title}</h2> : null}
           <Button variant="ghost" onClick={() => setMobileNavOpen(false)} className="md:hidden" aria-label="Close mobile menu">
             <X size={16} />
           </Button>
-          <Button variant="ghost" onClick={() => setCollapsed((v) => !v)} className="hidden md:inline-flex" aria-label="Toggle side menu">
+          <Button variant="ghost" onClick={() => setCollapsed((v) => !v)} className="inline-flex" aria-label="Toggle side menu">
             {collapsed ? <Menu size={16} /> : <X size={16} />}
           </Button>
         </div>

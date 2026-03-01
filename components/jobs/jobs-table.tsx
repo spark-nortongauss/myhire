@@ -20,6 +20,7 @@ type CvVersion = {
   name: string;
   summary: string;
   skills: string;
+  filePath?: string;
   isDefault?: boolean;
   createdAt: string;
 };
@@ -27,7 +28,8 @@ type CvVersion = {
 const today = new Date().toISOString().slice(0, 10);
 
 const getMatchScore = (row: any) => {
-  const raw = row.match_score ?? row.ai_insights_json?.match_score ?? null;
+  const aiScore = row.ai_insights_json?.match_score;
+  const raw = aiScore ?? row.match_score ?? null;
   const parsed = Number(raw);
   if (Number.isNaN(parsed)) return null;
   return Math.max(0, Math.min(100, Math.round(parsed)));
@@ -88,7 +90,9 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
       body: JSON.stringify({
         url: sourceUrl,
         content: entryMode === "manual" ? pageContent : "",
-        cvText: selectedCv ? `${selectedCv.summary}\n${selectedCv.skills}` : ""
+        cvText: selectedCv ? `${selectedCv.summary}\n${selectedCv.skills}` : "",
+        cvFilePath: selectedCv?.filePath ?? null,
+        cvVersionName: selectedCv?.name ?? null
       })
     });
 
