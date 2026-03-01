@@ -39,6 +39,8 @@ export async function POST(request: Request) {
   const url = (body?.url ?? "").toString().trim();
   const content = (body?.content ?? "").toString().trim();
   const cvText = (body?.cvText ?? "").toString().trim();
+  const cvFilePath = (body?.cvFilePath ?? "").toString().trim();
+  const cvVersionName = (body?.cvVersionName ?? "").toString().trim();
   if (!url && !content) return NextResponse.json({ error: "Provide a URL or page content" }, { status: 400 });
 
   const importId = randomUUID();
@@ -110,7 +112,11 @@ export async function POST(request: Request) {
 
       aiSummary = { ...aiSummary, ...JSON.parse(completion.choices[0]?.message?.content || "{}") };
 
-      if (cvText) {
+      const cvProfileText = [cvText, cvVersionName ? `CV version: ${cvVersionName}` : "", cvFilePath ? `CV file path: ${cvFilePath}` : ""]
+        .filter(Boolean)
+        .join("\n");
+
+      if (cvProfileText) {
         const matchCompletion = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           response_format: { type: "json_object" },
@@ -123,7 +129,7 @@ export async function POST(request: Request) {
               role: "user",
               content:
                 "Given CV profile text and a job description, return JSON with keys: match_score(number from 0 to 100), match_summary(max 280 chars), strengths(array max 4), gaps(array max 4).\n\nCV:\n" +
-                cvText.slice(0, 8000) +
+                cvProfileText.slice(0, 8000) +
                 "\n\nJOB:\n" +
                 description.slice(0, 8000)
             }
@@ -133,6 +139,11 @@ export async function POST(request: Request) {
         aiSummary = { ...aiSummary, ...JSON.parse(matchCompletion.choices[0]?.message?.content || "{}") };
       }
     }
+
+    const normalizedMatchScore = Number(aiSummary.match_score);
+    const safeMatchScore = Number.isFinite(normalizedMatchScore)
+      ? Math.max(0, Math.min(100, Math.round(normalizedMatchScore)))
+      : null;
 
     const aiWorkMode = ["remote", "hybrid", "on_site"].includes(String(aiSummary.work_mode))
       ? aiSummary.work_mode
@@ -153,7 +164,13 @@ export async function POST(request: Request) {
         location: aiSummary.location || location,
         salary_text: salaryText,
         ai_insights: (aiSummary.keywords || []).map((x: string) => `• ${x}`).join("\n") || null,
-        ai_insights_json: aiSummary,
+        ai_insights_json: {
+          ...aiSummary,
+          match_score: safeMatchScore,
+          cv_file_path: cvFilePath || null,
+          cv_version_name: cvVersionName || null
+        },
+        match_score: safeMatchScore,
         applied_at: new Date().toISOString().slice(0, 10)
       })
       .select("id")
