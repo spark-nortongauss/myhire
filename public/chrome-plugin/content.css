@@ -1,0 +1,106 @@
+#myhire-plugin-root {
+  all: initial;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.myhire-plugin-launcher,
+.myhire-plugin-panel,
+.myhire-plugin-panel * {
+  box-sizing: border-box;
+  font-family: Inter, Arial, sans-serif;
+}
+
+.myhire-plugin-launcher {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(76, 29, 149, 0.35);
+  z-index: 2147483647;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.myhire-plugin-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 72px;
+  width: 320px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.5);
+  padding: 12px;
+  z-index: 2147483647;
+}
+
+.myhire-plugin-panel h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.myhire-plugin-panel p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.myhire-plugin-field {
+  margin-bottom: 8px;
+}
+
+.myhire-plugin-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.myhire-plugin-input {
+  width: 100%;
+  background: #020617;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.myhire-plugin-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.myhire-plugin-btn {
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.myhire-plugin-btn.primary {
+  background: #4f46e5;
+  border-color: #6366f1;
+  color: white;
+}
+
+.myhire-plugin-status {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+}
+
+.myhire-plugin-hidden {
+  display: none;
+}
