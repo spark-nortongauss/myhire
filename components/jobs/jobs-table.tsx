@@ -127,23 +127,23 @@ export function JobsTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <Input
           placeholder="Job title"
           value={filterTitle}
           onChange={(e) => setFilterTitle(e.target.value)}
-          className="w-40"
+          className="w-full sm:w-44"
         />
         <Input
           placeholder="Company"
           value={filterCompany}
           onChange={(e) => setFilterCompany(e.target.value)}
-          className="w-40"
+          className="w-full sm:w-44"
         />
         <Select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="w-40"
+          className="w-full sm:w-44"
         >
           <option value="">All status</option>
           {statusOptions.map((s) => (
