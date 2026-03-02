@@ -10,7 +10,7 @@ const localeOptions = ["en-US", "zh-CN", "es-ES", "fr-FR", "ar", "pt-BR", "hi-IN
 
 export default function SettingsPage() {
   const supabase = createClient();
-  const [form, setForm] = useState({ full_name: "", locale: "en-US", openai_api_key: "" });
+  const [form, setForm] = useState({ full_name: "", locale: "en-US" });
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export default function SettingsPage() {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data } = await supabase.from("user_profiles").select("*").eq("user_id", userData.user.id).maybeSingle();
-      setForm((prev) => ({ ...prev, ...data, openai_api_key: userData.user?.user_metadata?.openai_api_key ?? "" }));
+      setForm((prev) => ({ ...prev, ...data }));
     })();
   }, [supabase]);
 
@@ -27,8 +27,7 @@ export default function SettingsPage() {
     if (!userData.user) return;
     const payload = { full_name: form.full_name, locale: form.locale, user_id: userData.user.id };
     const { error } = await supabase.from("user_profiles").upsert(payload, { onConflict: "user_id" });
-    const { error: metaError } = await supabase.auth.updateUser({ data: { openai_api_key: form.openai_api_key } });
-    setMessage(error?.message || metaError?.message || "Settings saved");
+    setMessage(error?.message || "Settings saved");
   };
 
   return (
@@ -46,10 +45,6 @@ export default function SettingsPage() {
               <option key={locale}>{locale}</option>
             ))}
           </Select>
-        </div>
-        <div>
-          <label className="text-sm">OpenAI API Key</label>
-          <Input type="password" value={form.openai_api_key} onChange={(e) => setForm({ ...form, openai_api_key: e.target.value })} placeholder="sk-..." />
         </div>
         <Button onClick={save}>Save settings</Button>
         {message ? <p className="text-sm">{message}</p> : null}
