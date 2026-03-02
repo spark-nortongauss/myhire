@@ -83,7 +83,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
       {mobileNavOpen ? <button className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close menu" /> : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs overflow-y-auto border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:static md:w-auto ${
+        className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs overflow-y-auto border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:sticky md:top-0 md:h-screen md:self-start md:w-auto ${
           collapsed ? "md:w-20" : "md:w-64"
         } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
