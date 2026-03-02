@@ -23,6 +23,16 @@ const statusTone: Record<JobStatus, string> = {
 };
 const cvStorageKey = "myhire-cv-versions";
 
+const COVER_LETTER_MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED_COVER_LETTER_TYPES = new Set(["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
+const ALLOWED_COVER_LETTER_EXTENSIONS = [".pdf", ".doc", ".docx", ".txt"];
+
+const isAllowedCoverLetter = (file: File) => {
+  const name = file.name.toLowerCase();
+  return ALLOWED_COVER_LETTER_TYPES.has(file.type) || ALLOWED_COVER_LETTER_EXTENSIONS.some((ext) => name.endsWith(ext));
+};
+
+
 type CvVersion = {
   id: string;
   name: string;
@@ -128,6 +138,9 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
   };
 
   const uploadCoverLetter = async (jobId: string, file: File) => {
+    if (file.size > COVER_LETTER_MAX_BYTES) return alert("Cover letter must be 5MB or smaller.");
+    if (!isAllowedCoverLetter(file)) return alert("Allowed cover letter types: PDF, DOC, DOCX, TXT.");
+
     const path = `${userId}/cover-letter/${jobId}/${Date.now()}-${file.name}`;
     const { error } = await supabase.storage.from("job-files").upload(path, file, { upsert: true });
     if (error) return alert(error.message);
@@ -235,7 +248,12 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
           <div className="flex items-center gap-2">
             <label className="cursor-pointer rounded-lg border border-border bg-slate-50 p-2 text-slate-700 transition hover:bg-slate-100" title="Upload cover letter">
               <Upload size={15} />
-              <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && uploadCoverLetter(row.original.id, e.target.files[0])} />
+              <input
+                type="file"
+                accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,text/plain,.txt"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && uploadCoverLetter(row.original.id, e.target.files[0])}
+              />
             </label>
             <Button
               variant="ghost"
