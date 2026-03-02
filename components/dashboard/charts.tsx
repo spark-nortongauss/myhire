@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart } from "recharts";
 
 const COLORS = ["#6d5efc", "#14b8a6", "#f59e0b", "#ef4444", "#3b82f6"];
 
@@ -31,6 +32,18 @@ export function WeeklyChart({ data }: { data: Array<{ week: string; count: numbe
           <Tooltip />
           <Bar dataKey="count" fill="#14b8a6" radius={[6, 6, 0, 0]} />
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export function WeeklyTrendMini({ data }: { data: Array<{ week: string; count: number }> }) {
+  return (
+    <div className="h-16 w-28">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data}>
+          <Area type="monotone" dataKey="count" stroke="#6d5efc" fill="#c7d2fe" strokeWidth={2} />
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );
