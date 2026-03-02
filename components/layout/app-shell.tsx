@@ -83,7 +83,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
       {mobileNavOpen ? <button className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close menu" /> : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:static md:w-auto ${
+        className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs overflow-y-auto border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:static md:w-auto ${
           collapsed ? "md:w-20" : "md:w-64"
         } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
@@ -98,18 +98,18 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
             </Button>
           </div>
         </div>
-        <nav className="flex h-[calc(100vh-4.5rem)] flex-col">
+        <nav className="flex min-h-[calc(100dvh-4.5rem)] flex-col md:min-h-[calc(100vh-4.5rem)]">
           <div className="space-y-2">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 title={item.label}
-                className={`flex items-center rounded-md px-3 py-2 hover:bg-muted ${collapsed ? "justify-center" : "gap-2"}`}
+                className={`flex min-w-0 items-center rounded-md px-3 py-2 hover:bg-muted ${collapsed ? "justify-center" : "gap-2"}`}
                 href={item.href}
                 onClick={() => setMobileNavOpen(false)}
               >
                 <item.icon size={18} />
-                {!collapsed ? <span>{item.label}</span> : null}
+                {!collapsed ? <span className="truncate">{item.label}</span> : null}
               </Link>
             ))}
           </div>
@@ -124,7 +124,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
             </Button>
             <div className="h-10 w-24 animate-pulse rounded-full bg-gradient-to-r from-indigo-500/30 via-cyan-400/20 to-fuchsia-500/30 sm:w-40" />
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             <div className="flex rounded-full border border-border/60 bg-background/70 p-1">
               <Button variant="ghost" className="h-8 w-8 rounded-full p-0" onClick={() => setTheme("light")} aria-label="Light mode">
                 <Sun size={15} />
@@ -133,11 +133,11 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
                 <Moon size={15} />
               </Button>
             </div>
-            <div className="relative flex items-center rounded-full border border-border/60 bg-background/70 pl-2 pr-6">
+            <div className="relative flex min-w-0 items-center rounded-full border border-border/60 bg-background/70 pl-2 pr-6">
               <select
                 value={locale}
                 onChange={(e) => setLocale(e.target.value as Locale)}
-                className="w-24 appearance-none bg-transparent pr-4 text-sm font-medium outline-none sm:w-auto"
+                className="w-24 appearance-none bg-transparent pr-4 text-sm font-medium outline-none sm:w-44"
                 aria-label="Language"
                 title={`${localeMeta[locale].countryName} (${localeMeta[locale].languageCode})`}
               >
