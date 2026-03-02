@@ -5,23 +5,78 @@ import Link from "next/link";
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import type { JobStatus } from "@/types/db";
 import { createClient } from "@/lib/supabase/client";
-import { Select } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import type { JobStatus } from "@/types/db";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
+
+const statusOptions: JobStatus[] = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
+const statusTone: Record<JobStatus, string> = {
+  applied: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  proposal: "bg-blue-100 text-blue-700 border-blue-200",
+  interview: "bg-amber-100 text-amber-700 border-amber-200",
+  offer: "bg-violet-100 text-violet-700 border-violet-200",
+  rejected: "bg-rose-100 text-rose-700 border-rose-200",
+  no_answer: "bg-slate-100 text-slate-600 border-slate-200"
+};
+const statusMeta: Record<JobStatus, { label: string; Icon: LucideIcon }> = {
+  applied: { label: "Applied", Icon: Send },
+  proposal: { label: "Proposal", Icon: FileText },
+  interview: { label: "Interview", Icon: MessageSquare },
+  offer: { label: "Offer", Icon: Handshake },
+  rejected: { label: "Rejected", Icon: CircleOff },
+  no_answer: { label: "No answer", Icon: Plane }
+};
+const cvStorageKey = "myhire-cv-versions";
+const COVER_LETTER_MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED_COVER_LETTER_TYPES = new Set(["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
+const ALLOWED_COVER_LETTER_EXTENSIONS = [".pdf", ".doc", ".docx", ".txt"];
+
+const isAllowedCoverLetter = (file: File) => ALLOWED_COVER_LETTER_TYPES.has(file.type) || ALLOWED_COVER_LETTER_EXTENSIONS.some((ext) => file.name.toLowerCase().endsWith(ext));
+const getMatchScore = (row: any) => {
+  const parsed = Number(row.ai_insights_json?.match_score ?? row.match_score ?? Number.NaN);
+  return Number.isNaN(parsed) ? null : Math.max(0, Math.min(100, Math.round(parsed)));
+};
+const getScoreTone = (score: number | null) => (score == null ? "bg-slate-100 text-slate-700" : score >= 80 ? "bg-emerald-100 text-emerald-700" : score >= 60 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700");
+const countryIcon = (country?: string | null, mode?: string | null) => (mode === "remote" ? "✈️" : country ? country.slice(0, 2).toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0))) : "-");
 
 const statusOptions: JobStatus[] = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
 
 export function JobsTable({ initialData, userId }: { initialData: any[]; userId: string }) {
   const supabase = createClient();
   const [data, setData] = useState<any[]>(initialData);
-  const [filterTitle, setFilterTitle] = useState("");
-  const [filterCompany, setFilterCompany] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [filter, setFilter] = useState({ title: "", company: "", status: "" });
+  const [sortBy, setSortBy] = useState<"applied_at" | "job_title" | "company_name">("applied_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [open, setOpen] = useState(false);
+  const [entryMode, setEntryMode] = useState<"url" | "manual">("url");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [pageContent, setPageContent] = useState("");
+  const [selectedCvId, setSelectedCvId] = useState("");
+  const [cvVersions, setCvVersions] = useState<CvVersion[]>([]);
+  const [pending, startTransition] = useTransition();
+  const [duplicateWarn, setDuplicateWarn] = useState<any>(null);
+  const [previewScore, setPreviewScore] = useState<number | null>(null);
+  const [processingState, setProcessingState] = useState<"idle" | "processing" | "done">("idle");
+
+  useEffect(() => {
+    const stored = localStorage.getItem(cvStorageKey);
+    if (!stored) return;
+    const parsed = JSON.parse(stored) as CvVersion[];
+    setCvVersions(parsed);
+    const defaultCv = parsed.find((item) => item.isDefault) ?? parsed[0];
+    if (defaultCv) setSelectedCvId(defaultCv.id);
+  }, []);
 
   const refresh = async () => {
     if (!supabase) return alert("Supabase client not configured.");
     const { data: rows } = await supabase.from("v_job_applications_enriched").select("*").order("applied_at", { ascending: false });
     setData(rows ?? []);
+    setSelectedIds([]);
   };
 
   const updateStatus = async (id: string, status: JobStatus) => {
