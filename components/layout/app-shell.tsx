@@ -5,7 +5,7 @@ import type { Route } from "next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import gsap from "gsap";
-import { BriefcaseBusiness, FolderOpen, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, FolderOpen, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const labels = {
@@ -28,6 +28,16 @@ const localeFlags: Record<Locale, string> = {
   ar: "🇸🇦",
   "pt-BR": "🇧🇷",
   "hi-IN": "🇮🇳"
+};
+
+const localeMeta: Record<Locale, { countryCode: string; countryName: string; languageCode: string }> = {
+  "en-US": { countryCode: "US", countryName: "United States", languageCode: "EN" },
+  "zh-CN": { countryCode: "CN", countryName: "China", languageCode: "CN" },
+  "es-ES": { countryCode: "ES", countryName: "Spain", languageCode: "ES" },
+  "fr-FR": { countryCode: "FR", countryName: "France", languageCode: "FR" },
+  ar: { countryCode: "SA", countryName: "Saudi Arabia", languageCode: "AR" },
+  "pt-BR": { countryCode: "BR", countryName: "Brazil", languageCode: "PT" },
+  "hi-IN": { countryCode: "IN", countryName: "India", languageCode: "HI" }
 };
 
 export function AppShell({ children, logoutButton }: { children: React.ReactNode; logoutButton: React.ReactNode }) {
@@ -125,14 +135,21 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
                 <Moon size={15} />
               </Button>
             </div>
-            <div className="flex items-center rounded-full border border-border/60 bg-background/70 px-2">
-              <select value={locale} onChange={(e) => setLocale(e.target.value as Locale)} className="bg-transparent text-sm outline-none" aria-label="Language" title={locale}>
+            <div className="relative flex items-center rounded-full border border-border/60 bg-background/70 pl-2 pr-6">
+              <select
+                value={locale}
+                onChange={(e) => setLocale(e.target.value as Locale)}
+                className="appearance-none bg-transparent pr-4 text-sm font-medium outline-none"
+                aria-label="Language"
+                title={`${localeMeta[locale].countryName} (${localeMeta[locale].languageCode})`}
+              >
                 {Object.keys(labels).map((lng) => (
-                  <option key={lng} value={lng} title={labels[lng as Locale].dashboard}>
-                    {localeFlags[lng as Locale]}
+                  <option key={lng} value={lng} title={`${localeMeta[lng as Locale].countryName} (${localeMeta[lng as Locale].languageCode})`}>
+                    {localeFlags[lng as Locale]} {localeMeta[lng as Locale].countryCode} ({localeMeta[lng as Locale].languageCode})
                   </option>
                 ))}
               </select>
+              <ChevronDown size={14} className="pointer-events-none absolute right-2 text-muted-foreground" />
             </div>
             <button className="rounded-full border border-border/60 bg-background/70 p-2">
               <UserCircle2 size={18} />
