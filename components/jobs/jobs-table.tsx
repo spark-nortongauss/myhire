@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
-import { CheckCircle2, Eye, FileText, Plane, Sparkles, Upload } from "lucide-react";
+import { CheckCircle2, CircleOff, Eye, FileText, Handshake, MessageSquare, Plane, Send, Sparkles, Upload, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { JobStatus } from "@/types/db";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,14 @@ const statusTone: Record<JobStatus, string> = {
   rejected: "bg-rose-100 text-rose-700 border-rose-200",
   no_answer: "bg-slate-100 text-slate-600 border-slate-200"
 };
+const statusMeta: Record<JobStatus, { label: string; Icon: LucideIcon }> = {
+  applied: { label: "Applied", Icon: Send },
+  proposal: { label: "Proposal", Icon: FileText },
+  interview: { label: "Interview", Icon: MessageSquare },
+  offer: { label: "Offer", Icon: Handshake },
+  rejected: { label: "Rejected", Icon: CircleOff },
+  no_answer: { label: "No answer", Icon: Plane }
+};
 const cvStorageKey = "myhire-cv-versions";
 const COVER_LETTER_MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_COVER_LETTER_TYPES = new Set(["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
@@ -35,6 +43,39 @@ const getScoreTone = (score: number | null) => (score == null ? "bg-slate-100 te
 const countryIcon = (country?: string | null, mode?: string | null) => (mode === "remote" ? "✈️" : country ? country.slice(0, 2).toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0))) : "-");
 
 type CvVersion = { id: string; name: string; summary: string; skills: string; filePath?: string; isDefault?: boolean; createdAt: string };
+
+function StatusIconSelect({ status, onChange }: { status: JobStatus; onChange: (status: JobStatus) => void }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const currentMeta = statusMeta[status];
+  const CurrentIcon = currentMeta.Icon;
+
+  return <div ref={rootRef} className="relative inline-block text-left">
+    <Button type="button" variant="ghost" className={`h-9 w-9 rounded-full border p-0 ${statusTone[status] ?? ""}`} title={`Status: ${currentMeta.label}`} onClick={() => setOpen((prev) => !prev)}>
+      <CurrentIcon size={16} />
+    </Button>
+    {open ? <div className="absolute left-0 z-20 mt-2 w-40 rounded-lg border border-border bg-white p-1 shadow-lg">
+      {statusOptions.map((option) => {
+        const optionMeta = statusMeta[option];
+        const OptionIcon = optionMeta.Icon;
+        return <button key={option} type="button" className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-slate-100 ${option === status ? "bg-slate-100 font-medium" : ""}`} onClick={() => { onChange(option); setOpen(false); }}>
+          <OptionIcon size={14} className="text-slate-600" />
+          <span>{optionMeta.label}</span>
+        </button>;
+      })}
+    </div> : null}
+  </div>;
+}
 
 export function JobsTable({ initialData, userId }: { initialData: any[]; userId: string }) {
   const supabase = createClient();
@@ -69,7 +110,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
     setSelectedIds([]);
   };
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateStatus = async (id: string, status: JobStatus) => {
     await supabase.from("job_applications").update({ status, status_updated_at: new Date().toISOString() }).eq("id", id);
     refresh();
   };
@@ -163,7 +204,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
     { id: "match_score", header: "AI Match", cell: ({ row }) => { const score = getMatchScore(row.original); return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${getScoreTone(score)}`}>{score == null ? "Not scored" : `${score}%`}</span>; } },
     { id: "cv_version", header: "CV Version", cell: ({ row }) => row.original.ai_insights_json?.cv_version_name || "Default CV" },
     { accessorKey: "job_url", header: "Job URL", cell: ({ row }) => (row.original.job_url ? <a href={row.original.job_url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">Open link</a> : "-") },
-    { accessorKey: "status", header: "Status", cell: ({ row }) => <Select value={row.original.status} onChange={(e) => updateStatus(row.original.id, e.target.value)} className={`min-w-36 border text-sm font-semibold capitalize ${statusTone[row.original.status as JobStatus] ?? ""}`}>{statusOptions.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}</Select> },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <StatusIconSelect status={row.original.status as JobStatus} onChange={(status) => updateStatus(row.original.id, status)} /> },
     { accessorKey: "days_since_applied", header: "Days Since Applied", cell: ({ row }) => <span className={row.original.is_overdue ? "font-semibold text-red-600" : ""}>{row.original.days_since_applied ?? "-"}</span> },
     { accessorKey: "files", header: "Cover Letter", cell: ({ row }) => <div className="flex items-center gap-2"><label className="cursor-pointer rounded-lg border border-border bg-slate-50 p-2 text-slate-700 transition hover:bg-slate-100" title="Upload cover letter"><Upload size={15} /><input type="file" accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,text/plain,.txt" className="hidden" onChange={(e) => e.target.files?.[0] && uploadCoverLetter(row.original.id, e.target.files[0])} /></label><Button variant="ghost" className="h-8 w-8 p-0" disabled={!row.original.cover_letter_file_path} onClick={() => downloadFile(row.original.cover_letter_file_path)}>{row.original.cover_letter_file_path ? <Eye size={16} className="text-indigo-600" /> : <FileText size={16} className="text-slate-400" />}</Button></div> }
   ], [selectedIds]);
