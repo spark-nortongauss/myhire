@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 const cvStorageKey = "myhire-cv-versions";
+const MAX_CV_BYTES = 5 * 1024 * 1024;
 
 type CvVersion = {
   id: string;
@@ -28,6 +29,12 @@ export function MyFilesManager({ userId }: { userId: string }) {
 
   const isPdfFile = (file: File) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
+  const validateCvFile = (file: File) => {
+    if (!isPdfFile(file)) return "Only PDF files are allowed.";
+    if (file.size > MAX_CV_BYTES) return "CV file must be 5MB or smaller.";
+    return null;
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem(cvStorageKey);
     if (!stored) return;
@@ -42,9 +49,12 @@ export function MyFilesManager({ userId }: { userId: string }) {
   const addVersion = async () => {
     if (!form.name.trim() && !newCvFile) return;
 
-    if (newCvFile && !isPdfFile(newCvFile)) {
-      alert("Only PDF files are allowed.");
-      return;
+    if (newCvFile) {
+      const fileError = validateCvFile(newCvFile);
+      if (fileError) {
+        alert(fileError);
+        return;
+      }
     }
 
     const rowId = crypto.randomUUID();
@@ -89,8 +99,9 @@ export function MyFilesManager({ userId }: { userId: string }) {
   };
 
   const uploadCvFile = async (rowId: string, file: File) => {
-    if (!isPdfFile(file)) {
-      alert("Only PDF files are allowed.");
+    const fileError = validateCvFile(file);
+    if (fileError) {
+      alert(fileError);
       return;
     }
 
@@ -117,7 +128,7 @@ export function MyFilesManager({ userId }: { userId: string }) {
         <div>
           <p className="mb-1 text-sm font-medium">Upload CV file (optional)</p>
           <input ref={createFileInputRef} type="file" accept="application/pdf,.pdf" className="w-full text-sm" onChange={(e) => setNewCvFile(e.target.files?.[0] || null)} />
-          <p className="mt-1 text-xs text-muted-foreground">Only PDF files are allowed. If you upload a file, we store it in the same job-files bucket location used for CV uploads.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Only PDF files up to 5MB are allowed. If you upload a file, we store it in the same job-files bucket location used for CV uploads.</p>
         </div>
         <Textarea
           className="min-h-24"

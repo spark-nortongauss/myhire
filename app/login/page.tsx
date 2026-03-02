@@ -1,23 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { getSupabaseEnv } from "@/lib/supabase/env";
 import { AnimatedBackground } from "@/components/login/animated-bg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => (getSupabaseEnv().ok ? createClient() : null), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [reduceMotion, setReduceMotion] = useState(false);
 
   const signIn = async () => {
+    if (!supabase) return setMessage("Supabase environment variables are missing.");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return setMessage(error.message);
     router.push("/dashboard");
@@ -25,6 +27,7 @@ export default function LoginPage() {
   };
 
   const sendMagicLink = async () => {
+    if (!supabase) return setMessage("Supabase environment variables are missing.");
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` }

@@ -51,21 +51,42 @@ App file paths:
 - CV: `{user_id}/cv/{job_application_id}/{filename}`
 - Cover letter: `{user_id}/cover-letter/{job_application_id}/{filename}`
 
-## 4) Get API keys and set env variables
-1. In Supabase Dashboard → **Project Settings → API**.
-2. Copy:
-   - `Project URL`
-   - `anon public` key
-   - `service_role` key (optional, server-side only)
+**Storage policy recommendations (Phase 1 hardening):**
+- Keep `job-files` bucket private.
+- Restrict object paths to `auth.uid()` prefixes (`{user_id}/...`).
+- Enforce max file size of 5MB for CV/cover-letter uploads.
+- Allow only approved MIME/extensions:
+  - CV: PDF (`application/pdf`, `.pdf`)
+  - Cover letter: PDF/DOC/DOCX/TXT
 
-Create `.env.local` in project root:
+## 4) Environment Variables
+Set these in `.env.local` for local development and in **Vercel → Project Settings → Environment Variables** for production.
 
 ```bash
+# Browser + server Supabase config (safe to expose client-side)
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=... # optional (do not expose client-side)
-OPENAI_API_KEY=...            # optional, enables AI insights
+
+# Server-only OpenAI key (NEVER use NEXT_PUBLIC_ prefix)
+OPENAI_API_KEY=...
+
+# Server-side rate limiting for /api/import
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
+
+# Optional server-side key
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
+
+Where to find each value:
+1. **Supabase** → Project Settings → API:
+   - `NEXT_PUBLIC_SUPABASE_URL` = Project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = anon public key
+2. **OpenAI** → API Keys:
+   - `OPENAI_API_KEY`
+3. **Upstash Redis** → Database → REST API:
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
 
 ## 5) Install and run locally
 ```bash
@@ -88,8 +109,10 @@ Then open `http://localhost:3000`.
 4. In **Environment Variables**, add:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `OPENAI_API_KEY` (server-side only)
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
    - `SUPABASE_SERVICE_ROLE_KEY` (optional)
-   - `OPENAI_API_KEY` (optional)
 5. Click **Deploy**.
 6. After deploy, open your Vercel URL and test login + jobs flow.
 
