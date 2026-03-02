@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { AnimatedBackground } from "@/components/login/animated-bg";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,19 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/20 bg-black/50 p-6 backdrop-blur">
         <h1 className="text-2xl font-bold">Welcome to MyHire</h1>
         <p className="mt-2 text-sm text-white/80">Track and optimize your job search from one dashboard.</p>
+
+        <div className="mt-4 rounded-xl border border-indigo-300/40 bg-indigo-500/10 p-3">
+          <p className="text-sm font-medium text-indigo-200">New: Chrome Plugin</p>
+          <p className="mt-1 text-xs text-indigo-100/90">Use MyHire on any job board: scrape the page, attach your CV, and auto-create job entries.</p>
+          <Link
+            href="/api/chrome-plugin-download"
+            download
+            className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-indigo-200/60 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition hover:bg-indigo-50"
+          >
+            <Download size={14} className="mr-2" />
+            Download the Chrome Plugin
+          </Link>
+        </div>
 
         <label className="mt-4 block text-sm">Email</label>
         <Input className="mt-1 bg-white text-black" value={email} onChange={(e) => setEmail(e.target.value)} />

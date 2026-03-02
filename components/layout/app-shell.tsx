@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, ChevronLeft, ChevronRight, FolderOpen, Globe, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
   }, [locale]);
 
   const text = useMemo(() => labels[locale], [locale]);
-  const navItems = [
+  const navItems: { href: Route; icon: typeof LayoutDashboard; label: string }[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: text.dashboard },
     { href: "/jobs", icon: BriefcaseBusiness, label: text.jobs },
     { href: "/files", icon: FolderOpen, label: text.files },
