@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, ChevronLeft, ChevronRight, FolderOpen, Globe, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import gsap from "gsap";
+import { BriefcaseBusiness, FolderOpen, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const labels = {
@@ -18,11 +20,23 @@ const labels = {
 
 type Locale = keyof typeof labels;
 
+const localeFlags: Record<Locale, string> = {
+  "en-US": "🇺🇸",
+  "zh-CN": "🇨🇳",
+  "es-ES": "🇪🇸",
+  "fr-FR": "🇫🇷",
+  ar: "🇸🇦",
+  "pt-BR": "🇧🇷",
+  "hi-IN": "🇮🇳"
+};
+
 export function AppShell({ children, logoutButton }: { children: React.ReactNode; logoutButton: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [locale, setLocale] = useState<Locale>("en-US");
+  const contentRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("myhire-theme") as "light" | "dark" | null;
@@ -40,6 +54,11 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
     localStorage.setItem("myhire-locale", locale);
   }, [locale]);
 
+  useEffect(() => {
+    if (!contentRef.current) return;
+    gsap.fromTo(contentRef.current, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.45, ease: "power2.out" });
+  }, [pathname]);
+
   const text = useMemo(() => labels[locale], [locale]);
   const navItems: { href: Route; icon: typeof LayoutDashboard; label: string }[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: text.dashboard },
@@ -52,6 +71,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
       {navItems.map((item) => (
         <Link
           key={item.href}
+          title={item.label}
           className={`flex items-center rounded-md px-3 py-2 hover:bg-muted ${collapsed ? "justify-center" : "gap-2"}`}
           href={item.href}
           onClick={() => setMobileNavOpen(false)}
@@ -81,19 +101,12 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
             {collapsed ? <Menu size={16} /> : <X size={16} />}
           </Button>
         </div>
-        <nav className="space-y-2">
+        <nav className="flex h-[calc(100vh-4.5rem)] flex-col">
+          <div className="space-y-2">
           {navLinks}
-          <div className="rounded-md px-1 md:hidden">{logoutButton}</div>
-          <div className="rounded-md px-1 hidden md:block">{logoutButton}</div>
+          </div>
+          <div className={`mt-auto rounded-md px-1 ${collapsed ? "[&_.logout-label]:hidden [&_button]:justify-center" : ""}`}>{logoutButton}</div>
         </nav>
-        <Button
-          variant="ghost"
-          className="absolute -right-4 top-16 hidden h-8 w-8 rounded-full border border-border bg-background/95 p-0 shadow-sm md:inline-flex"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-label="Collapse left side menu"
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </Button>
       </aside>
       <section className="flex-1">
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border/40 bg-panel/70 px-5 py-3 backdrop-blur">
@@ -113,10 +126,11 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
               </Button>
             </div>
             <div className="flex items-center rounded-full border border-border/60 bg-background/70 px-2">
-              <Globe size={14} className="mr-1" />
-              <select value={locale} onChange={(e) => setLocale(e.target.value as Locale)} className="bg-transparent text-sm outline-none" aria-label="Language">
+              <select value={locale} onChange={(e) => setLocale(e.target.value as Locale)} className="bg-transparent text-sm outline-none" aria-label="Language" title={locale}>
                 {Object.keys(labels).map((lng) => (
-                  <option key={lng}>{lng}</option>
+                  <option key={lng} value={lng} title={labels[lng as Locale].dashboard}>
+                    {localeFlags[lng as Locale]}
+                  </option>
                 ))}
               </select>
             </div>
@@ -125,7 +139,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
             </button>
           </div>
         </header>
-        <div className="p-6">{children}</div>
+        <div ref={contentRef} className="p-6">{children}</div>
       </section>
     </div>
   );

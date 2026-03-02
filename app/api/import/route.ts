@@ -171,6 +171,7 @@ export async function POST(request: Request) {
           cv_version_name: cvVersionName || null
         },
         match_score: safeMatchScore,
+        cv_file_path: cvFilePath || null,
         applied_at: new Date().toISOString().slice(0, 10)
       })
       .select("id")

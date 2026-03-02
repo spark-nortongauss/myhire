@@ -151,8 +151,11 @@ export function MyFilesManager({ userId }: { userId: string }) {
                 <td className="max-w-md px-3 py-2 text-slate-700">{row.summary || "-"}</td>
                 <td className="px-3 py-2 text-slate-700">{row.skills || "-"}</td>
                 <td className="px-3 py-2">
-                  <input type="file" accept="application/pdf,.pdf" className="w-56 text-xs" onChange={(e) => e.target.files?.[0] && uploadCvFile(row.id, e.target.files[0])} />
-                  {row.filePath ? <p className="mt-1 text-xs text-emerald-700">Uploaded</p> : null}
+                  {row.filePath ? (
+                    <p className="mt-1 text-xs font-medium text-emerald-700">Uploaded</p>
+                  ) : (
+                    <input type="file" accept="application/pdf,.pdf" className="w-56 text-xs" onChange={(e) => e.target.files?.[0] && uploadCvFile(row.id, e.target.files[0])} />
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex gap-2">

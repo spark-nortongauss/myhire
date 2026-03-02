@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Power } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/layout/app-shell";
@@ -13,8 +14,9 @@ async function LogoutButton() {
 
   return (
     <form action={logout}>
-      <Button variant="ghost" className="w-full justify-start">
-        Logout
+      <Button variant="ghost" className="w-full justify-start gap-2">
+        <Power size={16} />
+        <span className="logout-label">Logout</span>
       </Button>
     </form>
   );
