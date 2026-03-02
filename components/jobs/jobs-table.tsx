@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
-import { Sparkles } from "lucide-react";
+import { Eye, FileText, Sparkles, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { JobStatus } from "@/types/db";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,14 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 
 const statusOptions: JobStatus[] = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
+const statusTone: Record<JobStatus, string> = {
+  applied: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  proposal: "bg-blue-100 text-blue-700 border-blue-200",
+  interview: "bg-amber-100 text-amber-700 border-amber-200",
+  offer: "bg-violet-100 text-violet-700 border-violet-200",
+  rejected: "bg-rose-100 text-rose-700 border-rose-200",
+  no_answer: "bg-slate-100 text-slate-600 border-slate-200"
+};
 const cvStorageKey = "myhire-cv-versions";
 
 type CvVersion = {
@@ -202,9 +210,15 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Select value={row.original.status} onChange={(e) => updateStatus(row.original.id, e.target.value)}>
+          <Select
+            value={row.original.status}
+            onChange={(e) => updateStatus(row.original.id, e.target.value)}
+            className={`min-w-36 border text-sm font-semibold capitalize ${statusTone[row.original.status as JobStatus] ?? ""}`}
+          >
             {statusOptions.map((s) => (
-              <option key={s}>{s}</option>
+              <option key={s} value={s}>
+                {s.replace("_", " ")}
+              </option>
             ))}
           </Select>
         )
@@ -218,13 +232,20 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
         accessorKey: "files",
         header: "Cover Letter",
         cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <input type="file" className="w-28 text-xs" onChange={(e) => e.target.files?.[0] && uploadCoverLetter(row.original.id, e.target.files[0])} />
-            {row.original.cover_letter_file_path ? (
-              <Button variant="ghost" onClick={() => downloadFile(row.original.cover_letter_file_path)}>
-                Open
-              </Button>
-            ) : null}
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer rounded-lg border border-border bg-slate-50 p-2 text-slate-700 transition hover:bg-slate-100" title="Upload cover letter">
+              <Upload size={15} />
+              <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && uploadCoverLetter(row.original.id, e.target.files[0])} />
+            </label>
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0"
+              title={row.original.cover_letter_file_path ? "Open cover letter" : "Cover letter not uploaded"}
+              disabled={!row.original.cover_letter_file_path}
+              onClick={() => downloadFile(row.original.cover_letter_file_path)}
+            >
+              {row.original.cover_letter_file_path ? <Eye size={16} className="text-indigo-600" /> : <FileText size={16} className="text-slate-400" />}
+            </Button>
           </div>
         )
       }

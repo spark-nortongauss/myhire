@@ -1,7 +1,8 @@
 import { startOfWeek, format } from "date-fns";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BriefcaseBusiness } from "lucide-react";
 import { enforceOverdueRejections } from "@/lib/actions/overdue";
 import { createClient } from "@/lib/supabase/server";
-import { FunnelChart, PlatformsChart, WeeklyChart } from "@/components/dashboard/charts";
+import { FunnelChart, PlatformsChart, WeeklyChart, WeeklyTrendMini } from "@/components/dashboard/charts";
 
 export default async function DashboardPage() {
   await enforceOverdueRejections();
@@ -29,9 +30,29 @@ export default async function DashboardPage() {
     }
   }
 
+  const weeklyData = Array.from(weekMap, ([week, count]) => ({ week, count }));
+  const lastWeek = weeklyData.at(-1)?.count ?? 0;
+  const prevWeek = weeklyData.at(-2)?.count ?? 0;
+  const trendIcon = lastWeek > prevWeek ? ArrowUpRight : lastWeek < prevWeek ? ArrowDownRight : ArrowRight;
+  const trendLabel = lastWeek > prevWeek ? "Up" : lastWeek < prevWeek ? "Down" : "Stable";
+  const TrendIcon = trendIcon;
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="card flex items-center justify-between border-indigo-100">
+        <div>
+          <p className="text-sm text-muted-foreground">Applications this week</p>
+          <p className="mt-1 flex items-center gap-2 text-2xl font-bold">
+            <BriefcaseBusiness size={20} className="text-indigo-500" />
+            {lastWeek}
+          </p>
+          <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
+            <TrendIcon size={14} className="text-indigo-500" /> {trendLabel} vs previous week ({prevWeek})
+          </p>
+        </div>
+        <WeeklyTrendMini data={weeklyData} />
+      </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {[
           ["Applied", kpi?.applied_count ?? 0],
@@ -55,7 +76,7 @@ export default async function DashboardPage() {
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <FunnelChart data={Array.from(statusMap, ([status, count]) => ({ status, count }))} />
-        <WeeklyChart data={Array.from(weekMap, ([week, count]) => ({ week, count }))} />
+        <WeeklyChart data={weeklyData} />
         <PlatformsChart data={Array.from(platformMap, ([platform, count]) => ({ platform, count }))} />
       </div>
     </div>
