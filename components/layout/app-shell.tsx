@@ -5,17 +5,17 @@ import type { Route } from "next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import gsap from "gsap";
-import { BriefcaseBusiness, ChevronDown, FolderOpen, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, FilePenLine, FolderOpen, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const labels = {
-  "en-US": { dashboard: "Dashboard", jobs: "My Jobs", files: "My Files", settings: "Settings", logout: "Logout", title: "MyHire" },
-  "zh-CN": { dashboard: "仪表板", jobs: "职位", files: "我的文件", settings: "设置", logout: "退出", title: "MyHire" },
-  "es-ES": { dashboard: "Panel", jobs: "Empleos", files: "Mis archivos", settings: "Ajustes", logout: "Cerrar sesión", title: "MyHire" },
-  "fr-FR": { dashboard: "Tableau de bord", jobs: "Mes offres", files: "Mes fichiers", settings: "Paramètres", logout: "Déconnexion", title: "MyHire" },
-  ar: { dashboard: "لوحة التحكم", jobs: "وظائفي", files: "ملفاتي", settings: "الإعدادات", logout: "تسجيل الخروج", title: "MyHire" },
-  "pt-BR": { dashboard: "Painel", jobs: "Minhas Vagas", files: "Meus arquivos", settings: "Configurações", logout: "Sair", title: "MyHire" },
-  "hi-IN": { dashboard: "डैशबोर्ड", jobs: "नौकरियां", files: "मेरी फ़ाइलें", settings: "सेटिंग्स", logout: "लॉगआउट", title: "MyHire" }
+  "en-US": { dashboard: "Dashboard", jobs: "My Jobs", files: "My Files", settings: "Settings", coverLetters: "Cover Letters", logout: "Logout", title: "MyHire" },
+  "zh-CN": { dashboard: "仪表板", jobs: "职位", files: "我的文件", settings: "设置", coverLetters: "求职信", logout: "退出", title: "MyHire" },
+  "es-ES": { dashboard: "Panel", jobs: "Empleos", files: "Mis archivos", settings: "Ajustes", coverLetters: "Cartas", logout: "Cerrar sesión", title: "MyHire" },
+  "fr-FR": { dashboard: "Tableau de bord", jobs: "Mes offres", files: "Mes fichiers", settings: "Paramètres", coverLetters: "Lettres", logout: "Déconnexion", title: "MyHire" },
+  ar: { dashboard: "لوحة التحكم", jobs: "وظائفي", files: "ملفاتي", settings: "الإعدادات", coverLetters: "خطاب التقديم", logout: "تسجيل الخروج", title: "MyHire" },
+  "pt-BR": { dashboard: "Painel", jobs: "Minhas Vagas", files: "Meus arquivos", settings: "Configurações", coverLetters: "Cartas", logout: "Sair", title: "MyHire" },
+  "hi-IN": { dashboard: "डैशबोर्ड", jobs: "नौकरियां", files: "मेरी फ़ाइलें", settings: "सेटिंग्स", coverLetters: "कवर लेटर", logout: "लॉगआउट", title: "MyHire" }
 } as const;
 
 type Locale = keyof typeof labels;
@@ -73,60 +73,58 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
   const navItems: { href: Route; icon: typeof LayoutDashboard; label: string }[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: text.dashboard },
     { href: "/jobs", icon: BriefcaseBusiness, label: text.jobs },
+    { href: "/cover-letter-generator", icon: FilePenLine, label: text.coverLetters },
     { href: "/files", icon: FolderOpen, label: text.files },
     { href: "/settings", icon: Settings, label: text.settings }
   ];
-  const navLinks = (
-    <>
-      {navItems.map((item) => (
-        <Link
-          key={item.href}
-          title={item.label}
-          className={`flex items-center rounded-md px-3 py-2 hover:bg-muted ${collapsed ? "justify-center" : "gap-2"}`}
-          href={item.href}
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <item.icon size={18} />
-          {!collapsed ? <span>{item.label}</span> : null}
-        </Link>
-      ))}
-    </>
-  );
 
   return (
     <div className="flex min-h-screen bg-grid">
       {mobileNavOpen ? <button className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close menu" /> : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 border-r border-border/50 bg-panel/80 p-4 backdrop-blur transition-all md:static md:z-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:static md:w-auto ${
           collapsed ? "md:w-20" : "md:w-64"
-        } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} ${collapsed ? "w-20" : "w-64"}`}
+        } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
-        <div className="mb-6 flex items-center justify-between">
-          {!collapsed ? <h2 className="bg-gradient-to-r from-indigo-500 to-cyan-400 bg-clip-text text-xl font-extrabold text-transparent">{text.title}</h2> : null}
-          <Button variant="ghost" onClick={() => setMobileNavOpen(false)} className="md:hidden" aria-label="Close mobile menu">
-            <X size={16} />
-          </Button>
-          <Button variant="ghost" onClick={() => setCollapsed((v) => !v)} className="inline-flex" aria-label="Toggle side menu">
-            {collapsed ? <Menu size={16} /> : <X size={16} />}
-          </Button>
+        <div className="mb-6 flex items-center justify-between gap-2">
+          {!collapsed ? <h2 className="truncate bg-gradient-to-r from-indigo-500 to-cyan-400 bg-clip-text text-xl font-extrabold text-transparent">{text.title}</h2> : null}
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" onClick={() => setCollapsed((v) => !v)} className="hidden md:inline-flex" aria-label="Toggle side menu">
+              {collapsed ? <Menu size={16} /> : <X size={16} />}
+            </Button>
+            <Button variant="ghost" onClick={() => setMobileNavOpen(false)} className="md:hidden" aria-label="Close mobile menu">
+              <X size={16} />
+            </Button>
+          </div>
         </div>
         <nav className="flex h-[calc(100vh-4.5rem)] flex-col">
           <div className="space-y-2">
-          {navLinks}
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                title={item.label}
+                className={`flex items-center rounded-md px-3 py-2 hover:bg-muted ${collapsed ? "justify-center" : "gap-2"}`}
+                href={item.href}
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <item.icon size={18} />
+                {!collapsed ? <span>{item.label}</span> : null}
+              </Link>
+            ))}
           </div>
           <div className={`mt-auto rounded-md px-1 ${collapsed ? "[&_.logout-label]:hidden [&_button]:justify-center" : ""}`}>{logoutButton}</div>
         </nav>
       </aside>
-      <section className="flex-1">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border/40 bg-panel/70 px-5 py-3 backdrop-blur">
+      <section className="min-w-0 flex-1">
+        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-panel/70 px-4 py-3 backdrop-blur md:px-5">
           <div className="flex items-center gap-2">
             <Button variant="ghost" className="h-8 w-8 p-0 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label="Open mobile menu">
               <Menu size={18} />
             </Button>
-            <div className="h-10 w-40 animate-pulse rounded-full bg-gradient-to-r from-indigo-500/30 via-cyan-400/20 to-fuchsia-500/30" />
+            <div className="h-10 w-24 animate-pulse rounded-full bg-gradient-to-r from-indigo-500/30 via-cyan-400/20 to-fuchsia-500/30 sm:w-40" />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <div className="flex rounded-full border border-border/60 bg-background/70 p-1">
               <Button variant="ghost" className="h-8 w-8 rounded-full p-0" onClick={() => setTheme("light")} aria-label="Light mode">
                 <Sun size={15} />
@@ -139,7 +137,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
               <select
                 value={locale}
                 onChange={(e) => setLocale(e.target.value as Locale)}
-                className="appearance-none bg-transparent pr-4 text-sm font-medium outline-none"
+                className="w-24 appearance-none bg-transparent pr-4 text-sm font-medium outline-none sm:w-auto"
                 aria-label="Language"
                 title={`${localeMeta[locale].countryName} (${localeMeta[locale].languageCode})`}
               >
@@ -156,7 +154,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
             </button>
           </div>
         </header>
-        <div ref={contentRef} className="p-6">{children}</div>
+        <div ref={contentRef} className="p-4 md:p-6">{children}</div>
       </section>
     </div>
   );
