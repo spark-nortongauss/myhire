@@ -20,6 +20,7 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OrbAccent } from "@/components/ui/orb-accent";
 
 const labels = {
   "en-US": { dashboard: "Dashboard", jobs: "My Jobs", files: "My Files", settings: "Settings", coverLetters: "Cover Letters", logout: "Logout", title: "MyHire" },
@@ -166,7 +167,8 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
           <div className={`mt-auto rounded-md px-1 ${collapsed ? "[&_.logout-label]:hidden [&_button]:justify-center" : ""}`}>{logoutButton}</div>
         </nav>
       </aside>
-      <section className="min-w-0 flex-1">
+      <section className="relative min-w-0 flex-1">
+        <OrbAccent />
         <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-panel/70 px-4 py-3 backdrop-blur md:px-5">
           <div className="flex items-center gap-2">
             <Button variant="ghost" className="h-8 w-8 p-0 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label="Open mobile menu">

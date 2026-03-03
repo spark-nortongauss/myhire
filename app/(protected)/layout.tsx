@@ -3,6 +3,7 @@ import { Power } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/layout/app-shell";
+import { PageTransition } from "@/components/ui/page-transition";
 
 async function LogoutButton() {
   async function logout() {
@@ -30,5 +31,5 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   if (!user) redirect("/login");
 
-  return <AppShell logoutButton={<LogoutButton />}>{children}</AppShell>;
+  return <AppShell logoutButton={<LogoutButton />}><PageTransition>{children}</PageTransition></AppShell>;
 }
