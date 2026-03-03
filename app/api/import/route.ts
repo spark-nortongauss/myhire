@@ -100,6 +100,12 @@ function sanitizeExtractedText(value: unknown, fallback: string) {
   return cleaned || fallback;
 }
 
+function normalizeCountry(value: unknown) {
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned || null;
+}
+
 function normalizeJobPlatform(value: unknown) {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -182,6 +188,7 @@ export async function POST(request: Request) {
     const parsedHeader = parseJobHeader(text);
     const location = extractField(text, "Location") || parsedHeader.location || null;
     const salaryText = extractField(text, "Salary") || null;
+    const country = extractField(text, "Country") || null;
     const workMode = inferWorkMode(text);
     const description = normalizeDescription(text || "");
 
@@ -193,6 +200,7 @@ export async function POST(request: Request) {
       platform,
       brief_description: description.slice(0, 400),
       clean_job_description: description,
+      country,
       bullet_insights: [],
       keywords: [],
       risk_flags: [],
@@ -210,7 +218,7 @@ export async function POST(request: Request) {
           {
             role: "user",
             content:
-              "Return JSON with keys: title, company, location, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|wellfound|other), brief_description(max 300 chars), clean_job_description(only the job description content), recruitment_timeline(array of interview/recruitment stages if present), keywords(array max 30), bullet_insights(array max 5), risk_flags(array max 20). Input:\n" +
+              "Return JSON with keys: title, company, location, country, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|wellfound|other), brief_description(max 300 chars), clean_job_description(only the job description content), recruitment_timeline(array of interview/recruitment stages if present), keywords(array max 30), bullet_insights(array max 5), risk_flags(array max 20). Input:\n" +
               description
           }
         ]
@@ -222,7 +230,8 @@ export async function POST(request: Request) {
           ...firstValidated.data,
           title: sanitizeExtractedText(firstValidated.data.title, title),
           company: sanitizeExtractedText(firstValidated.data.company, company),
-          location: sanitizeExtractedText(firstValidated.data.location, location || "") || null
+          location: sanitizeExtractedText(firstValidated.data.location, location || "") || null,
+          country: normalizeCountry(firstValidated.data.country) || country
         };
       }
 
@@ -247,9 +256,10 @@ export async function POST(request: Request) {
     const aiWorkMode = ["remote", "hybrid", "on_site"].includes(String(aiSummary.work_mode)) ? aiSummary.work_mode : workMode;
     const fallbackTitle = parsedHeader.title || title;
     const fallbackCompany = parsedHeader.company || company;
+    const finalCountry = normalizeCountry(aiSummary.country) || country;
     const finalTitle = sanitizeExtractedText(aiSummary.title, fallbackTitle);
     const finalCompany = sanitizeExtractedText(aiSummary.company, fallbackCompany);
-    const finalLocation = sanitizeExtractedText(aiSummary.location, location || "") || null;
+    const finalLocation = sanitizeExtractedText(aiSummary.location, location || finalCountry || "") || null;
 
     const { data: possibleDuplicates } = await supabase
       .from("job_applications")
@@ -262,7 +272,7 @@ export async function POST(request: Request) {
     const duplicateAgeDays = duplicate?.applied_at ? differenceInDays(new Date(), new Date(duplicate.applied_at)) : null;
 
     if (previewOnly) {
-      return NextResponse.json({ ok: true, preview: { title: finalTitle, company: finalCompany, location: finalLocation, matchScore: safeMatchScore, duplicate, duplicateAgeDays, duplicateOlderThan3Weeks: duplicateAgeDays != null && duplicateAgeDays > 21 } });
+      return NextResponse.json({ ok: true, preview: { title: finalTitle, company: finalCompany, location: finalLocation, country: finalCountry, matchScore: safeMatchScore, duplicate, duplicateAgeDays, duplicateOlderThan3Weeks: duplicateAgeDays != null && duplicateAgeDays > 21 } });
     }
 
     if (duplicate && !bypassDuplicateCheck) {
@@ -287,6 +297,7 @@ export async function POST(request: Request) {
         ai_insights: (Array.isArray(aiSummary.bullet_insights) ? aiSummary.bullet_insights : []).map((x) => `• ${x}`).join("\n") || null,
         ai_insights_json: {
           ...aiSummary,
+          country: finalCountry,
           recruitment_timeline: Array.isArray(aiSummary.recruitment_timeline) ? aiSummary.recruitment_timeline : [],
           current_timeline_stage: 0,
           match_score: safeMatchScore,
