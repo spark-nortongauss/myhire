@@ -5,7 +5,20 @@ import type { Route } from "next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import gsap from "gsap";
-import { BriefcaseBusiness, ChevronDown, FilePenLine, FolderOpen, LayoutDashboard, Menu, Moon, Settings, Sun, UserCircle2, X } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  ChevronDown,
+  FilePenLine,
+  FolderOpen,
+  LayoutDashboard,
+  Menu,
+  Moon,
+  Settings,
+  Sparkles,
+  Sun,
+  UserCircle2,
+  X
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const labels = {
@@ -46,6 +59,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [locale, setLocale] = useState<Locale>("en-US");
   const contentRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -69,13 +83,24 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
     gsap.fromTo(contentRef.current, { autoAlpha: 0, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.45, ease: "power2.out" });
   }, [pathname]);
 
+  useEffect(() => {
+    if (!sidebarRef.current) return;
+
+    const navLinks = sidebarRef.current.querySelectorAll("[data-nav-link]");
+    gsap.fromTo(
+      navLinks,
+      { autoAlpha: 0, x: -20 },
+      { autoAlpha: 1, x: 0, duration: 0.4, stagger: 0.06, ease: "power2.out", delay: 0.06 }
+    );
+  }, [collapsed, mobileNavOpen]);
+
   const text = useMemo(() => labels[locale], [locale]);
-  const navItems: { href: Route; icon: typeof LayoutDashboard; label: string }[] = [
-    { href: "/dashboard", icon: LayoutDashboard, label: text.dashboard },
-    { href: "/jobs", icon: BriefcaseBusiness, label: text.jobs },
-    { href: "/cover-letter-generator", icon: FilePenLine, label: text.coverLetters },
-    { href: "/files", icon: FolderOpen, label: text.files },
-    { href: "/settings", icon: Settings, label: text.settings }
+  const navItems: { href: Route; icon: typeof LayoutDashboard; label: string; accent: string }[] = [
+    { href: "/dashboard", icon: LayoutDashboard, label: text.dashboard, accent: "from-indigo-500/25 to-cyan-400/20" },
+    { href: "/jobs", icon: BriefcaseBusiness, label: text.jobs, accent: "from-violet-500/25 to-fuchsia-400/20" },
+    { href: "/cover-letter-generator", icon: FilePenLine, label: text.coverLetters, accent: "from-cyan-500/25 to-emerald-400/20" },
+    { href: "/files", icon: FolderOpen, label: text.files, accent: "from-orange-500/25 to-rose-400/20" },
+    { href: "/settings", icon: Settings, label: text.settings, accent: "from-slate-500/25 to-zinc-400/20" }
   ];
 
   return (
@@ -83,12 +108,18 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
       {mobileNavOpen ? <button className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close menu" /> : null}
 
       <aside
+        ref={sidebarRef}
         className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs overflow-y-auto border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:sticky md:top-0 md:h-screen md:self-start md:w-auto ${
           collapsed ? "md:w-20" : "md:w-64"
         } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >
         <div className="mb-6 flex items-center justify-between gap-2">
-          {!collapsed ? <h2 className="truncate bg-gradient-to-r from-indigo-500 to-cyan-400 bg-clip-text text-xl font-extrabold text-transparent">{text.title}</h2> : null}
+          {!collapsed ? (
+            <h2 className="flex items-center gap-2 truncate bg-gradient-to-r from-indigo-500 via-cyan-400 to-fuchsia-500 bg-clip-text text-xl font-black text-transparent">
+              <Sparkles size={16} className="text-cyan-400" />
+              {text.title}
+            </h2>
+          ) : null}
           <div className="flex items-center gap-1">
             <Button variant="ghost" onClick={() => setCollapsed((v) => !v)} className="hidden md:inline-flex" aria-label="Toggle side menu">
               {collapsed ? <Menu size={16} /> : <X size={16} />}
@@ -100,18 +131,37 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
         </div>
         <nav className="flex min-h-[calc(100dvh-4.5rem)] flex-col md:min-h-[calc(100vh-4.5rem)]">
           <div className="space-y-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                title={item.label}
-                className={`flex min-w-0 items-center rounded-md px-3 py-2 hover:bg-muted ${collapsed ? "justify-center" : "gap-2"}`}
-                href={item.href}
-                onClick={() => setMobileNavOpen(false)}
-              >
-                <item.icon size={18} />
-                {!collapsed ? <span className="truncate">{item.label}</span> : null}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+              return (
+                <Link
+                  key={item.href}
+                  title={item.label}
+                  data-nav-link
+                  className={`group nav-animated-link relative flex min-w-0 items-center overflow-hidden rounded-xl border border-transparent px-3 py-2.5 transition-all duration-300 hover:border-border/70 hover:bg-muted/60 ${
+                    collapsed ? "justify-center" : "gap-2.5"
+                  } ${isActive ? "border-border/70 bg-muted/70 shadow-[0_0_0_1px_rgba(99,102,241,0.15)]" : ""}`}
+                  href={item.href}
+                  onClick={() => setMobileNavOpen(false)}
+                  onMouseEnter={(e) => {
+                    gsap.to(e.currentTarget.querySelector("[data-icon-wrap]"), { y: -1.5, scale: 1.04, duration: 0.2, ease: "power2.out" });
+                  }}
+                  onMouseLeave={(e) => {
+                    gsap.to(e.currentTarget.querySelector("[data-icon-wrap]"), { y: 0, scale: 1, duration: 0.2, ease: "power2.out" });
+                  }}
+                >
+                  <span className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r opacity-0 transition-opacity duration-300 ${item.accent} ${isActive ? "opacity-100" : "group-hover:opacity-90"}`} />
+                  <span data-icon-wrap className="rounded-lg bg-background/70 p-1.5 shadow-sm ring-1 ring-border/40 transition-colors group-hover:ring-border/70">
+                    <item.icon size={16} className={isActive ? "text-indigo-500" : "text-foreground/80"} />
+                  </span>
+                  {!collapsed ? (
+                    <span className="truncate text-sm font-semibold tracking-wide">{item.label}</span>
+                  ) : null}
+                  {isActive && !collapsed ? <span className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.75)]" /> : null}
+                </Link>
+              );
+            })}
           </div>
           <div className={`mt-auto rounded-md px-1 ${collapsed ? "[&_.logout-label]:hidden [&_button]:justify-center" : ""}`}>{logoutButton}</div>
         </nav>
