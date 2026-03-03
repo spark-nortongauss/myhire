@@ -23,6 +23,13 @@ const importRequestSchema = z.object({
 });
 
 const aiOutputSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  company: z.string().trim().min(1).max(200).optional(),
+  location: z.string().trim().min(1).max(200).optional(),
+  country: z.string().trim().min(1).max(120).optional(),
+  work_mode: z.enum(["remote", "hybrid", "on_site", "unknown"]).optional(),
+  platform: z.enum(supportedJobPlatforms).optional(),
+  brief_description: z.string().trim().max(400).optional(),
   bullet_insights: z.array(z.string().max(200)).max(5),
   keywords: z.array(z.string().max(50)).max(30),
   risk_flags: z.array(z.string().max(80)).max(20),
@@ -30,6 +37,74 @@ const aiOutputSchema = z.object({
   clean_job_description: z.string().max(12000).optional(),
   recruitment_timeline: z.array(z.string().max(200)).max(10).optional()
 });
+
+const UNKNOWN_TITLE_MARKERS = ["job details", "apply now", "careers", "linkedin", "indeed", "greenhouse", "lever"];
+
+function parseJobHeader(text: string) {
+  const lines = text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.replace(/[\t ]+/g, " ").trim())
+    .filter(Boolean);
+
+  const maxScan = Math.min(lines.length, 40);
+  let foundTitle: string | null = null;
+  let foundCompany: string | null = null;
+  let foundLocation: string | null = null;
+
+  for (let i = 0; i < maxScan; i += 1) {
+    const line = lines[i];
+    if (!foundTitle) {
+      const explicitTitle = line.match(/^(?:job\s*title|position|role)\s*[:\-|]\s*(.+)$/i)?.[1]?.trim();
+      if (explicitTitle) foundTitle = explicitTitle;
+    }
+
+    if (!foundCompany) {
+      const explicitCompany = line.match(/^(?:company|employer|organization|organisation)\s*[:\-|]\s*(.+)$/i)?.[1]?.trim();
+      if (explicitCompany) foundCompany = explicitCompany;
+    }
+
+    if (!foundLocation) {
+      const explicitLocation = line.match(/^(?:location|based in)\s*[:\-|]\s*(.+)$/i)?.[1]?.trim();
+      if (explicitLocation) foundLocation = explicitLocation;
+    }
+
+    if (foundTitle && foundCompany && foundLocation) break;
+  }
+
+  if (!foundTitle) {
+    const headline = lines.find((line) => line.length >= 6 && line.length <= 110 && !UNKNOWN_TITLE_MARKERS.some((marker) => line.toLowerCase().includes(marker)));
+    if (headline) foundTitle = headline;
+  }
+
+  if (!foundCompany) {
+    const companyFromAt = text.match(/\b(?:at|for)\s+([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,5})\b/);
+    if (companyFromAt?.[1]) foundCompany = companyFromAt[1].trim();
+  }
+
+  if (!foundLocation) {
+    const locationMatch = text.match(/\b(?:location|based in)\s*[:\-|]\s*([^\n|]+)$/im);
+    if (locationMatch?.[1]) foundLocation = locationMatch[1].trim();
+  }
+
+  return {
+    title: foundTitle,
+    company: foundCompany,
+    location: foundLocation
+  };
+}
+
+function sanitizeExtractedText(value: unknown, fallback: string) {
+  if (typeof value !== "string") return fallback;
+  const cleaned = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned || fallback;
+}
+
+function normalizeCountry(value: unknown) {
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned || null;
+}
 
 function normalizeJobPlatform(value: unknown) {
   if (typeof value !== "string") return null;
@@ -110,8 +185,10 @@ export async function POST(request: Request) {
       company = extractField(text, "Company") || extractField(text, "Employer") || dom.window.document.querySelector("meta[property='og:site_name']")?.getAttribute("content") || "Unknown";
     }
 
-    const location = extractField(text, "Location") || null;
+    const parsedHeader = parseJobHeader(text);
+    const location = extractField(text, "Location") || parsedHeader.location || null;
     const salaryText = extractField(text, "Salary") || null;
+    const country = extractField(text, "Country") || null;
     const workMode = inferWorkMode(text);
     const description = normalizeDescription(text || "");
 
@@ -123,6 +200,7 @@ export async function POST(request: Request) {
       platform,
       brief_description: description.slice(0, 400),
       clean_job_description: description,
+      country,
       bullet_insights: [],
       keywords: [],
       risk_flags: [],
@@ -140,13 +218,22 @@ export async function POST(request: Request) {
           {
             role: "user",
             content:
-              "Return JSON with keys: title, company, location, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|wellfound|other), brief_description(max 300 chars), clean_job_description(only the job description content), recruitment_timeline(array of interview/recruitment stages if present), keywords(array max 30), bullet_insights(array max 5), risk_flags(array max 20). Input:\n" +
+              "Return JSON with keys: title, company, location, country, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|wellfound|other), brief_description(max 300 chars), clean_job_description(only the job description content), recruitment_timeline(array of interview/recruitment stages if present), keywords(array max 30), bullet_insights(array max 5), risk_flags(array max 20). Input:\n" +
               description
           }
         ]
       });
       const firstValidated = aiOutputSchema.safeParse(safeJsonParse(extracted.choices[0]?.message?.content));
-      if (firstValidated.success) aiSummary = { ...aiSummary, ...firstValidated.data };
+      if (firstValidated.success) {
+        aiSummary = {
+          ...aiSummary,
+          ...firstValidated.data,
+          title: sanitizeExtractedText(firstValidated.data.title, title),
+          company: sanitizeExtractedText(firstValidated.data.company, company),
+          location: sanitizeExtractedText(firstValidated.data.location, location || "") || null,
+          country: normalizeCountry(firstValidated.data.country) || country
+        };
+      }
 
       if (cvText || cvVersionName || cvFilePath) {
         const cvProfileText = [cvText, cvVersionName ? `CV version: ${cvVersionName}` : "", cvFilePath ? `CV file path: ${cvFilePath}` : ""].filter(Boolean).join("\n");
@@ -167,6 +254,12 @@ export async function POST(request: Request) {
     const safeMatchScore = Number.isFinite(normalizedMatchScore) ? Math.max(0, Math.min(100, Math.round(normalizedMatchScore))) : null;
 
     const aiWorkMode = ["remote", "hybrid", "on_site"].includes(String(aiSummary.work_mode)) ? aiSummary.work_mode : workMode;
+    const fallbackTitle = parsedHeader.title || title;
+    const fallbackCompany = parsedHeader.company || company;
+    const finalCountry = normalizeCountry(aiSummary.country) || country;
+    const finalTitle = sanitizeExtractedText(aiSummary.title, fallbackTitle);
+    const finalCompany = sanitizeExtractedText(aiSummary.company, fallbackCompany);
+    const finalLocation = sanitizeExtractedText(aiSummary.location, location || finalCountry || "") || null;
 
     const { data: possibleDuplicates } = await supabase
       .from("job_applications")
@@ -179,7 +272,7 @@ export async function POST(request: Request) {
     const duplicateAgeDays = duplicate?.applied_at ? differenceInDays(new Date(), new Date(duplicate.applied_at)) : null;
 
     if (previewOnly) {
-      return NextResponse.json({ ok: true, preview: { title: String(aiSummary.title || title), company: String(aiSummary.company || company), matchScore: safeMatchScore, duplicate, duplicateAgeDays, duplicateOlderThan3Weeks: duplicateAgeDays != null && duplicateAgeDays > 21 } });
+      return NextResponse.json({ ok: true, preview: { title: finalTitle, company: finalCompany, location: finalLocation, country: finalCountry, matchScore: safeMatchScore, duplicate, duplicateAgeDays, duplicateOlderThan3Weeks: duplicateAgeDays != null && duplicateAgeDays > 21 } });
     }
 
     if (duplicate && !bypassDuplicateCheck) {
@@ -191,19 +284,20 @@ export async function POST(request: Request) {
       .from("job_applications")
       .insert({
         user_id: user.id,
-        job_title: String(aiSummary.title || title),
-        company_name: String(aiSummary.company || company),
+        job_title: finalTitle,
+        company_name: finalCompany,
         status: "applied",
         job_description: cleanDescription,
         brief_description: String(aiSummary.brief_description || cleanDescription.slice(0, 400)),
         job_url: url,
         platform: normalizeJobPlatform(aiSummary.platform) ?? normalizeJobPlatform(platform),
         work_mode: aiWorkMode,
-        location: String(aiSummary.location || location || "") || null,
+        location: finalLocation,
         salary_text: salaryText,
         ai_insights: (Array.isArray(aiSummary.bullet_insights) ? aiSummary.bullet_insights : []).map((x) => `• ${x}`).join("\n") || null,
         ai_insights_json: {
           ...aiSummary,
+          country: finalCountry,
           recruitment_timeline: Array.isArray(aiSummary.recruitment_timeline) ? aiSummary.recruitment_timeline : [],
           current_timeline_stage: 0,
           match_score: safeMatchScore,
