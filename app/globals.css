@@ -59,3 +59,16 @@ body {
 .modal-pop {
   animation: modal-pop 180ms ease-out;
 }
+
+.nav-animated-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-130%);
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.18) 50%, transparent 75%);
+  transition: transform 450ms ease;
+}
+
+.nav-animated-link:hover::after {
+  transform: translateX(130%);
+}
