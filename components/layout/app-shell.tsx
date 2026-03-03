@@ -109,7 +109,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
 
       <aside
         ref={sidebarRef}
-        className={`fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs overflow-y-auto border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:sticky md:top-0 md:h-screen md:self-start md:w-auto ${
+        className={`sidebar-scroll fixed inset-y-0 left-0 z-40 w-[86vw] max-w-xs overflow-y-auto border-r border-border/50 bg-panel/90 p-4 backdrop-blur transition-all md:sticky md:top-0 md:h-screen md:self-start md:w-auto ${
           collapsed ? "md:w-20" : "md:w-64"
         } ${mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
       >

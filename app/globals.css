@@ -72,3 +72,12 @@ body {
 .nav-animated-link:hover::after {
   transform: translateX(130%);
 }
+
+.sidebar-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}
