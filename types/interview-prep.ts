@@ -11,6 +11,12 @@ export interface InterviewPrepRow {
   recommended_questions: string[] | null;
   prep_tips: string[] | null;
   suggested_questions_to_ask: string[] | null;
+  selected_interviewers: string[] | null;
+  other_interviewer_detail: string | null;
+  team_description: string | null;
+  team_members_summary: string | null;
+  team_skills: string | null;
+  team_dynamics: string | null;
   last_session_at: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -45,6 +51,15 @@ export interface MockInterviewMessageRow {
 export interface InterviewPrepListItem extends InterviewPrepRow {
   job_title: string | null;
   company_name: string | null;
+}
+
+export interface InterviewerSelectionPayload {
+  selected_interviewers: string[];
+  other_interviewer_detail?: string;
+  team_description?: string;
+  team_members_summary?: string;
+  team_skills?: string;
+  team_dynamics?: string;
 }
 
 export interface GeneratedInterviewPrepPayload {

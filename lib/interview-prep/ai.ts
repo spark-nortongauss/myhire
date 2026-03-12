@@ -21,6 +21,19 @@ function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
+
+function buildInterviewerGuidance(selectedInterviewers: string[] | null | undefined) {
+  const selected = Array.isArray(selectedInterviewers) ? selectedInterviewers : [];
+  const guidance: string[] = [];
+  if (selected.includes("HR Manager")) guidance.push("HR Manager: behavioral, motivation, fit, conflict, communication.");
+  if (selected.some((v) => ["CTO", "Technical Manager", "VP Engineering"].includes(v))) guidance.push("Technical leadership profiles: architecture, systems, tradeoffs, depth.");
+  if (selected.some((v) => ["CEO", "Founder", "COO"].includes(v))) guidance.push("Executive profiles: leadership, business judgment, ownership, impact.");
+  if (selected.includes("Sales Director")) guidance.push("Sales Director: customer value, communication, persuasion, revenue orientation.");
+  if (selected.includes("Meet the Team")) guidance.push("Meet the Team: collaboration, practical execution, peer interaction, daily work style.");
+  if (!guidance.length) guidance.push("Use a balanced professional interview style tailored to role and stage.");
+  return guidance;
+}
+
 export async function generateInterviewPrepContent(input: {
   job_title?: string | null;
   company_name?: string | null;
@@ -31,6 +44,12 @@ export async function generateInterviewPrepContent(input: {
   notes?: string | null;
   interview_stage?: string | null;
   interview_type?: string | null;
+  selected_interviewers?: string[] | null;
+  other_interviewer_detail?: string | null;
+  team_description?: string | null;
+  team_members_summary?: string | null;
+  team_skills?: string | null;
+  team_dynamics?: string | null;
 }): Promise<GeneratedInterviewPrepPayload | null> {
   const openai = getOpenAI();
   if (!openai) return null;
@@ -47,7 +66,7 @@ export async function generateInterviewPrepContent(input: {
       },
       {
         role: "user",
-        content: `Prepare interview guidance with this context:\n${JSON.stringify(input).slice(0, 12000)}`
+        content: `Prepare interview guidance with this context:\n${JSON.stringify({ ...input, interviewer_guidance: buildInterviewerGuidance(input.selected_interviewers) }).slice(0, 12000)}`
       }
     ]
   });
@@ -73,6 +92,12 @@ export async function generateFirstWrittenQuestion(input: {
   notes?: string | null;
   interview_stage?: string | null;
   interview_type?: string | null;
+  selected_interviewers?: string[] | null;
+  other_interviewer_detail?: string | null;
+  team_description?: string | null;
+  team_members_summary?: string | null;
+  team_skills?: string | null;
+  team_dynamics?: string | null;
 }) {
   const openai = getOpenAI();
   if (!openai) return null;
@@ -81,7 +106,7 @@ export async function generateFirstWrittenQuestion(input: {
     temperature: 0.3,
     messages: [
       { role: "system", content: "Generate one professional interview question for a written mock interview. Return plain text only." },
-      { role: "user", content: `Context: ${JSON.stringify(input).slice(0, 12000)}` }
+      { role: "user", content: `Context: ${JSON.stringify({ ...input, interviewer_guidance: buildInterviewerGuidance(input.selected_interviewers) }).slice(0, 12000)}` }
     ]
   });
 
@@ -95,6 +120,12 @@ export async function evaluateWrittenAnswer(input: {
   company_name?: string | null;
   interview_stage?: string | null;
   interview_type?: string | null;
+  selected_interviewers?: string[] | null;
+  other_interviewer_detail?: string | null;
+  team_description?: string | null;
+  team_members_summary?: string | null;
+  team_skills?: string | null;
+  team_dynamics?: string | null;
 }): Promise<WrittenAnswerEvaluationPayload | null> {
   const openai = getOpenAI();
   if (!openai) return null;
@@ -110,7 +141,7 @@ export async function evaluateWrittenAnswer(input: {
       },
       {
         role: "user",
-        content: `Evaluate this interview answer and generate next question. Input: ${JSON.stringify(input).slice(0, 12000)}`
+        content: `Evaluate this interview answer and generate next question. Input: ${JSON.stringify({ ...input, interviewer_guidance: buildInterviewerGuidance(input.selected_interviewers) }).slice(0, 12000)}`
       }
     ]
   });

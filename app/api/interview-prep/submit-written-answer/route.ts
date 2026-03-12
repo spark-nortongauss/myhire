@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { addInterviewMessage, getSessionMessages } from "@/lib/interview-prep/data";
 import { evaluateWrittenAnswer } from "@/lib/interview-prep/ai";
+import { validateInterviewerSelection } from "@/lib/interview-prep/constants";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -37,6 +38,11 @@ export async function POST(request: Request) {
     .eq("user_id", user.id)
     .maybeSingle();
 
+  const selectionCheck = validateInterviewerSelection(prep?.selected_interviewers);
+  if (!selectionCheck.valid) {
+    return NextResponse.json({ error: selectionCheck.message ?? "Select at least one interviewer." }, { status: 400 });
+  }
+
   const messages = await getSessionMessages(supabase, session.id);
   const currentQuestion = [...messages].reverse().find((m) => m.role === "assistant" && m.question_text)?.question_text ?? "Please tell me about yourself.";
 
@@ -48,7 +54,13 @@ export async function POST(request: Request) {
     job_title: job?.job_title,
     company_name: job?.company_name,
     interview_stage: prep?.interview_stage,
-    interview_type: prep?.interview_type
+    interview_type: prep?.interview_type,
+    selected_interviewers: selectionCheck.selected,
+    other_interviewer_detail: prep?.other_interviewer_detail,
+    team_description: prep?.team_description,
+    team_members_summary: prep?.team_members_summary,
+    team_skills: prep?.team_skills,
+    team_dynamics: prep?.team_dynamics
   });
 
   if (!evaluation) {

@@ -19,6 +19,7 @@ export default async function InterviewPrepPage() {
             <tr>
               <th className="px-3 py-2 text-left">Job title</th>
               <th className="px-3 py-2 text-left">Company name</th>
+              <th className="px-3 py-2 text-left">Interviewers selected</th>
               <th className="px-3 py-2 text-left">Interview stage</th>
               <th className="px-3 py-2 text-left">Interview type</th>
               <th className="px-3 py-2 text-left">Prep status</th>
@@ -35,6 +36,7 @@ export default async function InterviewPrepPage() {
                     <Link href={`/interview-prep/${row.id}`}>{row.job_title || "Untitled job"}</Link>
                   </td>
                   <td className="px-3 py-2">{row.company_name || "Unknown"}</td>
+                  <td className="px-3 py-2">{Array.isArray(row.selected_interviewers) && row.selected_interviewers.length ? row.selected_interviewers.slice(0, 3).join(", ") : "-"}</td>
                   <td className="px-3 py-2">{row.interview_stage || "general"}</td>
                   <td className="px-3 py-2">{row.interview_type || "general"}</td>
                   <td className="px-3 py-2">{row.prep_status || "in_preparation"}</td>
@@ -45,7 +47,7 @@ export default async function InterviewPrepPage() {
               ))
             ) : (
               <tr>
-                <td className="px-3 py-6 text-center text-muted-foreground" colSpan={8}>
+                <td className="px-3 py-6 text-center text-muted-foreground" colSpan={9}>
                   No interview prep items yet. Move a job to interview status to create one.
                 </td>
               </tr>
