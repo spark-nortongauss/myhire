@@ -79,7 +79,8 @@ export async function ensureInterviewPrepForJob(supabase: DBClient, jobApplicati
       interview_stage: "general",
       interview_type: "general",
       prep_status: "in_preparation",
-      overall_readiness_score: 0
+      overall_readiness_score: 0,
+      selected_interviewers: ["1st Call"]
     })
     .select("id")
     .maybeSingle();
@@ -95,6 +96,54 @@ export async function ensureInterviewPrepForJob(supabase: DBClient, jobApplicati
   }
 
   return created;
+}
+
+export async function deleteInterviewPrepByIds(supabase: DBClient, userId: string, ids: string[]) {
+  const scopedIds = ids.filter(Boolean);
+  if (!scopedIds.length) return { deletedIds: [] as string[], failedIds: [] as string[] };
+
+  const { data: prepRows, error: prepError } = await supabase
+    .from("interview_prep")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", scopedIds);
+
+  if (prepError) return { deletedIds: [] as string[], failedIds: scopedIds };
+
+  const existingIds = (prepRows ?? []).map((row: { id: string }) => row.id).filter(Boolean);
+  if (!existingIds.length) return { deletedIds: [] as string[], failedIds: scopedIds };
+
+  const { error: deleteError } = await supabase
+    .from("interview_prep")
+    .delete()
+    .eq("user_id", userId)
+    .in("id", existingIds);
+
+  if (deleteError) return { deletedIds: [] as string[], failedIds: scopedIds };
+
+  return {
+    deletedIds: existingIds,
+    failedIds: scopedIds.filter((id) => !existingIds.includes(id))
+  };
+}
+
+export async function createLiveInterviewSession(supabase: DBClient, userId: string, interviewPrepId: string, jobApplicationId: string) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("mock_interview_sessions")
+    .insert({
+      user_id: userId,
+      interview_prep_id: interviewPrepId,
+      job_application_id: jobApplicationId,
+      mode: "live",
+      session_status: "active",
+      started_at: now
+    })
+    .select("*")
+    .maybeSingle<MockInterviewSessionRow>();
+
+  if (error) return null;
+  return data;
 }
 
 export async function createWrittenInterviewSession(supabase: DBClient, userId: string, interviewPrepId: string, jobApplicationId: string) {
