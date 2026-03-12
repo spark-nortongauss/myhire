@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,8 +27,11 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
   const [answer, setAnswer] = useState("");
   const [transcript, setTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [micStatus, setMicStatus] = useState<"unsupported" | "idle" | "listening" | "processing" | "error">("idle");
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const [lastFeedback, setLastFeedback] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef(false);
   const [selectedInterviewers, setSelectedInterviewers] = useState<string[]>(Array.isArray(prep.selected_interviewers) ? prep.selected_interviewers : []);
   const [otherDetail, setOtherDetail] = useState(prep.other_interviewer_detail ?? "");
   const [teamDescription, setTeamDescription] = useState(prep.team_description ?? "");
@@ -38,6 +41,27 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
 
   const supportsSpeechRecognition = typeof window !== "undefined" && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   const supportsSpeechSynthesis = typeof window !== "undefined" && typeof window.speechSynthesis !== "undefined";
+
+  useEffect(() => {
+    if (!supportsSpeechRecognition) {
+      setMicStatus("unsupported");
+      setSpeechError("Live voice interview is not supported in this browser. Please use Chrome or Edge, or use Written Interview.");
+      return;
+    }
+
+    if (micStatus === "unsupported") setMicStatus("idle");
+  }, [micStatus, supportsSpeechRecognition]);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop?.();
+      recognitionRef.current = null;
+    };
+  }, []);
 
   const activeQuestion = [...messages].reverse().find((m) => m.role === "assistant" && m.question_text)?.question_text ?? null;
   const selectionValidation = useMemo(() => validateInterviewerSelection(selectedInterviewers), [selectedInterviewers]);
@@ -52,27 +76,81 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
   };
 
   const startVoiceCapture = () => {
-    if (!supportsSpeechRecognition || isListening) return;
+    if (!supportsSpeechRecognition || isListeningRef.current) return;
+
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    const recognition = new SR();
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    recognition.onresult = (event: any) => {
-      const nextTranscript = Array.from(event.results ?? []).map((r: any) => r?.[0]?.transcript ?? "").join(" ").trim();
-      setTranscript(nextTranscript);
-    };
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-    recognitionRef.current = recognition;
-    setIsListening(true);
-    recognition.start();
+    if (!SR) {
+      setMicStatus("unsupported");
+      setSpeechError("Live voice interview is not supported in this browser. Please use Chrome or Edge, or use Written Interview.");
+      return;
+    }
+
+    if (!recognitionRef.current) {
+      const recognition = new SR();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      recognition.onstart = () => {
+        setIsListening(true);
+        setMicStatus("listening");
+      };
+      recognition.onresult = (event: any) => {
+        const nextTranscript = Array.from(event.results ?? []).map((r: any) => r?.[0]?.transcript ?? "").join(" ").trim();
+        setTranscript(nextTranscript);
+      };
+      recognition.onerror = (event: any) => {
+        const code = event?.error || "unknown";
+        const message = code === "not-allowed"
+          ? "Microphone permission was denied. Please allow microphone access and try again."
+          : code === "audio-capture"
+            ? "No microphone was detected. Check your input device and browser permissions."
+            : code === "no-speech"
+              ? "No speech was detected. Please try speaking again."
+              : code === "network"
+                ? "Speech recognition network error. Check your connection and retry."
+                : code === "aborted"
+                  ? "Recording was stopped before speech could be captured."
+                  : `Speech recognition error: ${code}.`;
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[LiveInterview] Speech recognition error", { code, event });
+        }
+        setIsListening(false);
+        setMicStatus("error");
+        setSpeechError(message);
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+        setMicStatus((prev) => (prev === "error" || prev === "unsupported" ? prev : "idle"));
+      };
+      recognitionRef.current = recognition;
+    }
+
+    setSpeechError(null);
+    setMicStatus("processing");
+    try {
+      recognitionRef.current.start();
+    } catch (err) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[LiveInterview] Failed to start speech recognition", err);
+      }
+      setIsListening(false);
+      setMicStatus("error");
+      setSpeechError("Unable to start microphone capture. Please retry or type your answer manually.");
+    }
   };
 
   const stopVoiceCapture = () => {
     recognitionRef.current?.stop?.();
     setIsListening(false);
+    setMicStatus("processing");
+  };
+
+  const retryVoiceCapture = () => {
+    setTranscript("");
+    setSpeechError(null);
+    if (supportsSpeechRecognition) {
+      setMicStatus("idle");
+    }
   };
 
   const toggleInterviewer = (option: string) => {
@@ -316,11 +394,13 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
         ) : (
           <div className="space-y-3">
             {!supportsSpeechRecognition || !supportsSpeechSynthesis ? <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">Live voice mode needs browser speech APIs. You can still use written mode.</p> : null}
+            {!supportsSpeechRecognition ? <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">Live voice interview is not supported in this browser. Please use Chrome or Edge, or use Written Interview.</p> : null}
             <div className="flex flex-wrap gap-2">{!liveSessionId ? <Button disabled={loading || !selectionValidation.valid} onClick={startLiveSession}>Start Live Interview</Button> : null}{liveSessionId ? <Button variant="ghost" disabled={loading} onClick={endLiveSession}>End live session</Button> : null}</div>
             <p className="rounded-md border bg-slate-50 p-3 text-sm"><strong>Current AI question:</strong> {activeQuestion || "No active question yet."}</p>
-            <p className="text-sm">Microphone: <strong>{isListening ? "Listening..." : "Idle"}</strong></p>
+            <p className="text-sm">Microphone: <strong>{micStatus === "unsupported" ? "Unsupported" : micStatus === "listening" ? "Listening" : micStatus === "processing" ? "Processing" : micStatus === "error" ? "Error" : "Idle"}</strong></p>
+            {speechError ? <p className="text-sm text-rose-700">{speechError}</p> : null}
             <Textarea className="min-h-24" value={transcript} onChange={(e) => setTranscript(e.target.value)} placeholder="Transcript appears here" />
-            <div className="flex flex-wrap gap-2"><Button variant="ghost" disabled={!supportsSpeechRecognition || loading || isListening || !liveSessionId} onClick={startVoiceCapture}>Record answer</Button><Button variant="ghost" disabled={!isListening} onClick={stopVoiceCapture}>Stop</Button><Button variant="ghost" disabled={loading} onClick={() => setTranscript("")}>Retry</Button><Button disabled={loading || !liveSessionId || !transcript.trim()} onClick={submitLiveTranscript}>Submit transcript</Button></div>
+            <div className="flex flex-wrap gap-2"><Button variant="ghost" disabled={!supportsSpeechRecognition || loading || isListening || !liveSessionId} onClick={startVoiceCapture}>Record answer</Button><Button variant="ghost" disabled={!isListening} onClick={stopVoiceCapture}>Stop</Button><Button variant="ghost" disabled={loading} onClick={retryVoiceCapture}>Retry</Button><Button disabled={loading || !liveSessionId || !transcript.trim()} onClick={submitLiveTranscript}>Submit transcript</Button></div>
             {lastFeedback ? <p className="rounded-md border bg-emerald-50 p-3 text-sm"><strong>Last feedback:</strong> {lastFeedback}</p> : null}
           </div>
         )}
