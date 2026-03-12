@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { InterviewPrepListItem, InterviewPrepRow, MockInterviewMessageRow, MockInterviewSessionRow } from "@/types/interview-prep";
+import type { InterviewPrepListItem, InterviewPrepRow, InterviewerSelectionPayload, MockInterviewMessageRow, MockInterviewSessionRow } from "@/types/interview-prep";
+import { normalizeInterviewerSelection } from "@/lib/interview-prep/constants";
 
 type DBClient = SupabaseClient<any, "public", any>;
 
@@ -159,4 +160,31 @@ export async function getSessionMessages(supabase: DBClient, sessionId: string) 
     .order("created_at", { ascending: true });
 
   return (data ?? []) as MockInterviewMessageRow[];
+}
+
+
+export async function updateInterviewerSelection(
+  supabase: DBClient,
+  userId: string,
+  prepId: string,
+  payload: InterviewerSelectionPayload
+) {
+  const selected = normalizeInterviewerSelection(payload.selected_interviewers);
+  const { data, error } = await supabase
+    .from("interview_prep")
+    .update({
+      selected_interviewers: selected,
+      other_interviewer_detail: payload.other_interviewer_detail?.trim() || null,
+      team_description: payload.team_description?.trim() || null,
+      team_members_summary: payload.team_members_summary?.trim() || null,
+      team_skills: payload.team_skills?.trim() || null,
+      team_dynamics: payload.team_dynamics?.trim() || null
+    })
+    .eq("id", prepId)
+    .eq("user_id", userId)
+    .select("*")
+    .maybeSingle<InterviewPrepRow>();
+
+  if (error) return null;
+  return data;
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { INTERVIEWER_OPTIONS, MAX_INTERVIEWERS, MIN_INTERVIEWERS, includesMeetTheTeam, validateInterviewerSelection } from "@/lib/interview-prep/constants";
 import type { InterviewPrepRow, MockInterviewMessageRow, MockInterviewSessionRow } from "@/types/interview-prep";
 
 type Props = {
@@ -20,10 +21,72 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
   const [sessionId, setSessionId] = useState<string | null>(sessions.find((s) => s.session_status === "active")?.id ?? null);
   const [messages, setMessages] = useState<MockInterviewMessageRow[]>(initialMessages);
   const [answer, setAnswer] = useState("");
+  const [selectedInterviewers, setSelectedInterviewers] = useState<string[]>(Array.isArray(prep.selected_interviewers) ? prep.selected_interviewers : []);
+  const [otherDetail, setOtherDetail] = useState(prep.other_interviewer_detail ?? "");
+  const [teamDescription, setTeamDescription] = useState(prep.team_description ?? "");
+  const [teamMembersSummary, setTeamMembersSummary] = useState(prep.team_members_summary ?? "");
+  const [teamSkills, setTeamSkills] = useState(prep.team_skills ?? "");
+  const [teamDynamics, setTeamDynamics] = useState(prep.team_dynamics ?? "");
 
   const activeQuestion = [...messages].reverse().find((m) => m.role === "assistant" && m.question_text)?.question_text ?? null;
+  const selectionValidation = useMemo(() => validateInterviewerSelection(selectedInterviewers), [selectedInterviewers]);
+  const meetTeamEnabled = includesMeetTheTeam(selectedInterviewers);
+  const otherEnabled = selectedInterviewers.includes("Other");
+
+  const toggleInterviewer = (option: string) => {
+    setError(null);
+    setSelectedInterviewers((prev) => {
+      if (prev.includes(option)) return prev.filter((item) => item !== option);
+      if (prev.length >= MAX_INTERVIEWERS) return prev;
+      return [...prev, option];
+    });
+  };
+
+  const saveInterviewerSelection = async () => {
+    setLoading(true);
+    setError(null);
+
+    if (!selectionValidation.valid) {
+      setError(selectionValidation.message ?? "Select interviewers before saving.");
+      setLoading(false);
+      return;
+    }
+
+    const res = await fetch("/api/interview-prep/update-interviewers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        interviewPrepId: prep.id,
+        selected_interviewers: selectionValidation.selected,
+        other_interviewer_detail: otherDetail,
+        team_description: teamDescription,
+        team_members_summary: teamMembersSummary,
+        team_skills: teamSkills,
+        team_dynamics: teamDynamics
+      })
+    });
+
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(payload.error || "Unable to save interviewer selection.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    router.refresh();
+  };
+
+  const ensureInterviewersSelected = () => {
+    if (!selectionValidation.valid) {
+      setError(selectionValidation.message ?? "Select at least one interviewer profile.");
+      return false;
+    }
+    return true;
+  };
 
   const generatePrep = async () => {
+    if (!ensureInterviewersSelected()) return;
     setLoading(true);
     setError(null);
     const res = await fetch("/api/interview-prep/generate", {
@@ -44,6 +107,7 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
   };
 
   const startSession = async () => {
+    if (!ensureInterviewersSelected()) return;
     setLoading(true);
     setError(null);
     const res = await fetch("/api/interview-prep/start-written", {
@@ -163,6 +227,50 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
         </div>
       </div>
 
+      <div className="card space-y-3">
+        <h2 className="text-lg font-semibold">Interviewers</h2>
+        <p className="text-sm text-muted-foreground">Select up to {MAX_INTERVIEWERS} interviewer profiles. At least {MIN_INTERVIEWERS} required.</p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {INTERVIEWER_OPTIONS.map((option) => {
+            const checked = selectedInterviewers.includes(option);
+            const disabled = !checked && selectedInterviewers.length >= MAX_INTERVIEWERS;
+            return (
+              <label key={option} className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${disabled ? "opacity-50" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={disabled || loading}
+                  onChange={() => toggleInterviewer(option)}
+                />
+                <span>{option}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="text-sm">Current selection: {selectedInterviewers.length ? selectedInterviewers.join(", ") : "None"}</p>
+
+        {otherEnabled ? (
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Other interviewer detail (optional)</label>
+            <Textarea className="min-h-20" value={otherDetail} onChange={(e) => setOtherDetail(e.target.value)} placeholder="Add any extra interviewer context" />
+          </div>
+        ) : null}
+
+        {meetTeamEnabled ? (
+          <div className="space-y-2 rounded-md border bg-slate-50 p-3">
+            <h3 className="font-medium">Meet the Team context</h3>
+            <p className="text-xs text-muted-foreground">Describe who is in the team, what each role does, likely technical/business focus, and what they may care about in the interview.</p>
+            <Textarea value={teamDescription} onChange={(e) => setTeamDescription(e.target.value)} placeholder="Team description" className="min-h-20" />
+            <Textarea value={teamMembersSummary} onChange={(e) => setTeamMembersSummary(e.target.value)} placeholder="Team members summary" className="min-h-20" />
+            <Textarea value={teamSkills} onChange={(e) => setTeamSkills(e.target.value)} placeholder="Team skills" className="min-h-20" />
+            <Textarea value={teamDynamics} onChange={(e) => setTeamDynamics(e.target.value)} placeholder="Team dynamics (optional)" className="min-h-20" />
+          </div>
+        ) : null}
+        <div>
+          <Button disabled={loading} onClick={saveInterviewerSelection}>Save interviewer selection</Button>
+        </div>
+      </div>
+
       <div className="card space-y-2">
         <h2 className="text-lg font-semibold">Job context</h2>
         <p><strong>Brief description:</strong> {job?.brief_description || "-"}</p>
@@ -175,7 +283,7 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
       <div className="card space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">AI Prep</h2>
-          <Button disabled={loading} onClick={generatePrep}>Generate interview prep</Button>
+          <Button disabled={loading || !selectionValidation.valid} onClick={generatePrep}>Generate interview prep</Button>
         </div>
         <List title="Likely interview questions" values={prep.recommended_questions} />
         <List title="Extracted skills" values={prep.key_skills_extracted} />
@@ -187,7 +295,7 @@ export function InterviewPrepDetailClient({ prep, job, sessions, initialMessages
         <h2 className="text-lg font-semibold">Mock Interview</h2>
         <p className="text-sm text-muted-foreground">Mode: written only</p>
         <div className="flex flex-wrap gap-2">
-          {!sessionId ? <Button disabled={loading} onClick={startSession}>Start Written Interview</Button> : null}
+          {!sessionId ? <Button disabled={loading || !selectionValidation.valid} onClick={startSession}>Start Written Interview</Button> : null}
           {sessionId ? <Button variant="ghost" disabled={loading} onClick={endSession}>End session</Button> : null}
         </div>
         {activeQuestion ? <p className="rounded-md border bg-slate-50 p-3 text-sm"><strong>Current question:</strong> {activeQuestion}</p> : <p className="text-sm text-muted-foreground">No active question yet.</p>}
