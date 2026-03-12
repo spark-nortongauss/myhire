@@ -23,13 +23,13 @@ import { Button } from "@/components/ui/button";
 import { OrbAccent } from "@/components/ui/orb-accent";
 
 const labels = {
-  "en-US": { dashboard: "Dashboard", jobs: "My Jobs", files: "My Files", settings: "Settings", coverLetters: "Cover Letters", logout: "Logout", title: "MyHire" },
-  "zh-CN": { dashboard: "仪表板", jobs: "职位", files: "我的文件", settings: "设置", coverLetters: "求职信", logout: "退出", title: "MyHire" },
-  "es-ES": { dashboard: "Panel", jobs: "Empleos", files: "Mis archivos", settings: "Ajustes", coverLetters: "Cartas", logout: "Cerrar sesión", title: "MyHire" },
-  "fr-FR": { dashboard: "Tableau de bord", jobs: "Mes offres", files: "Mes fichiers", settings: "Paramètres", coverLetters: "Lettres", logout: "Déconnexion", title: "MyHire" },
-  ar: { dashboard: "لوحة التحكم", jobs: "وظائفي", files: "ملفاتي", settings: "الإعدادات", coverLetters: "خطاب التقديم", logout: "تسجيل الخروج", title: "MyHire" },
-  "pt-BR": { dashboard: "Painel", jobs: "Minhas Vagas", files: "Meus arquivos", settings: "Configurações", coverLetters: "Cartas", logout: "Sair", title: "MyHire" },
-  "hi-IN": { dashboard: "डैशबोर्ड", jobs: "नौकरियां", files: "मेरी फ़ाइलें", settings: "सेटिंग्स", coverLetters: "कवर लेटर", logout: "लॉगआउट", title: "MyHire" }
+  "en-US": { dashboard: "Dashboard", jobs: "My Jobs", interviewPrep: "Interview Prep", files: "My Files", settings: "Settings", coverLetters: "Cover Letters", logout: "Logout", title: "MyHire" },
+  "zh-CN": { dashboard: "仪表板", jobs: "职位", interviewPrep: "面试准备", files: "我的文件", settings: "设置", coverLetters: "求职信", logout: "退出", title: "MyHire" },
+  "es-ES": { dashboard: "Panel", jobs: "Empleos", interviewPrep: "Preparación", files: "Mis archivos", settings: "Ajustes", coverLetters: "Cartas", logout: "Cerrar sesión", title: "MyHire" },
+  "fr-FR": { dashboard: "Tableau de bord", jobs: "Mes offres", interviewPrep: "Préparation", files: "Mes fichiers", settings: "Paramètres", coverLetters: "Lettres", logout: "Déconnexion", title: "MyHire" },
+  ar: { dashboard: "لوحة التحكم", jobs: "وظائفي", interviewPrep: "تحضير المقابلة", files: "ملفاتي", settings: "الإعدادات", coverLetters: "خطاب التقديم", logout: "تسجيل الخروج", title: "MyHire" },
+  "pt-BR": { dashboard: "Painel", jobs: "Minhas Vagas", interviewPrep: "Preparação", files: "Meus arquivos", settings: "Configurações", coverLetters: "Cartas", logout: "Sair", title: "MyHire" },
+  "hi-IN": { dashboard: "डैशबोर्ड", jobs: "नौकरियां", interviewPrep: "इंटरव्यू प्रेप", files: "मेरी फ़ाइलें", settings: "सेटिंग्स", coverLetters: "कवर लेटर", logout: "लॉगआउट", title: "MyHire" }
 } as const;
 
 type Locale = keyof typeof labels;
@@ -99,6 +99,7 @@ export function AppShell({ children, logoutButton }: { children: React.ReactNode
   const navItems: { href: Route; icon: typeof LayoutDashboard; label: string; accent: string }[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: text.dashboard, accent: "from-indigo-500/25 to-cyan-400/20" },
     { href: "/jobs", icon: BriefcaseBusiness, label: text.jobs, accent: "from-violet-500/25 to-fuchsia-400/20" },
+    { href: "/interview-prep", icon: Sparkles, label: text.interviewPrep, accent: "from-amber-500/25 to-orange-400/20" },
     { href: "/cover-letter-generator", icon: FilePenLine, label: text.coverLetters, accent: "from-cyan-500/25 to-emerald-400/20" },
     { href: "/files", icon: FolderOpen, label: text.files, accent: "from-orange-500/25 to-rose-400/20" },
     { href: "/settings", icon: Settings, label: text.settings, accent: "from-slate-500/25 to-zinc-400/20" }

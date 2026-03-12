@@ -59,7 +59,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
 
   useEffect(() => { const stored = localStorage.getItem(cvStorageKey); if (!stored) return; const parsed = JSON.parse(stored) as CvVersion[]; setCvVersions(parsed); const defaultCv = parsed.find((item) => item.isDefault) ?? parsed[0]; if (defaultCv) setSelectedCvId(defaultCv.id); }, []);
   const refresh = async () => { const { data: rows } = await supabase.from("v_job_applications_enriched").select("*").order("applied_at", { ascending: false }); setData(rows ?? []); setSelectedIds([]); };
-  const updateStatus = async (id: string, status: JobStatus) => { await supabase.from("job_applications").update({ status, status_updated_at: new Date().toISOString() }).eq("id", id); pushToast("Status updated"); refresh(); };
+  const updateStatus = async (id: string, status: JobStatus) => { const res = await fetch("/api/jobs/update-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); if (!res.ok) { const payload = await res.json().catch(() => ({})); return pushToast(payload.error || "Failed to update status", "error"); } pushToast("Status updated"); refresh(); };
   const deleteSelected = async () => { if (!selectedIds.length) return; const { error } = await supabase.from("job_applications").delete().in("id", selectedIds); if (error) return pushToast(error.message, "error"); setData((prev) => prev.filter((row) => !selectedIds.includes(row.id))); setSelectedIds([]); pushToast("Applications deleted"); setConfirmDeleteOpen(false); };
 
   const runImport = async (bypassDuplicateCheck = false) => {
