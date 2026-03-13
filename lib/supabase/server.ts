@@ -1,21 +1,25 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getSupabaseEnvOrThrow } from "@/lib/supabase/env";
 
 export async function createClient() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const { url, anon } = getSupabaseEnvOrThrow();
 
   return createServerClient(url, anon, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name: string, value: string, options: Record<string, unknown>) {
-        cookieStore.set({ name, value, ...(options ?? {}) });
-      },
-      remove(name: string, options: Record<string, unknown>) {
-        cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
+      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Ignore write attempts in Server Components.
+          // Session refresh is handled by middleware.
+        }
       }
     }
   });
