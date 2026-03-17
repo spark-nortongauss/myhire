@@ -159,9 +159,7 @@ export async function POST(request: Request) {
   const userIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const rateLimit = await enforceImportRateLimits(user.id, userIp).catch(() => null);
   if (!rateLimit) return NextResponse.json({ error: "Import unavailable due to server configuration" }, { status: 503 });
-  if (!rateLimit.allowed) {
-    return NextResponse.json({ error: "Too many import attempts. Please retry shortly.", retryAfter: rateLimit.retryAfter }, { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter) } });
-  }
+  // Import attempts are still tracked, but we no longer block users from creating a new job application.
 
   const importId = randomUUID();
   const platform = inferPlatform(url || content);
