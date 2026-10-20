@@ -6,7 +6,7 @@ export type JobStatus =
   | "rejected"
   | "no_answer";
 
-export type Platform = "linkedin" | "indeed" | "wellfound" | "other";
+export type Platform = "linkedin" | "indeed" | "apec" | "france_travail" | "welcome_to_the_jungle" | "glassdoor" | "company_website" | "referral" | "other";
 export type WorkMode = "remote" | "hybrid" | "on_site";
 
 export interface JobApplication {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { enforceOverdueRejections } from "@/lib/actions/overdue";
 
+// Retired: elapsed time is a follow-up signal, never proof of rejection.
 export async function POST() {
-  await enforceOverdueRejections();
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ error: "Automatic rejection is disabled. Update application statuses explicitly." }, { status: 410 });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Filter, Search, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast-provider";
 import { JOB_FINDER_EMPLOYMENT_TYPES, JOB_FINDER_REQUIREMENTS } from "@/lib/job-finder/types";
 
-type CvVersion = { id: string; name: string; summary: string; skills: string; isDefault?: boolean };
+import { useCvs } from "@/lib/use-cvs";
 
 const localeDefaults: Record<string, { country: string; language: string }> = {
   "en-US": { country: "US", language: "EN" },
@@ -25,16 +25,12 @@ export function JobFinderSearchClient() {
   const router = useRouter();
   const { pushToast } = useToast();
   const [loading, setLoading] = useState(false);
-  const cvVersions: CvVersion[] = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    const stored = localStorage.getItem("myhire-cv-versions");
-    return stored ? (JSON.parse(stored) as CvVersion[]) : [];
-  }, []);
-
-  const locale = typeof window !== "undefined" ? localStorage.getItem("myhire-locale") ?? "en-US" : "en-US";
+  const { cvs: cvVersions, loading: cvsLoading, error: cvError } = useCvs();
+  const [locale, setLocale] = useState("en-US");
   const defaults = localeDefaults[locale] ?? localeDefaults["en-US"];
-
-  const [cvId, setCvId] = useState(() => cvVersions.find((cv) => cv.isDefault)?.id ?? cvVersions[0]?.id ?? "");
+  const [cvId, setCvId] = useState("");
+  useEffect(() => { const cv = cvVersions.find((item) => item.isDefault) ?? cvVersions[0]; if (cv) setCvId((previous) => previous || cv.id); }, [cvVersions]);
+  useEffect(() => { if (cvError) pushToast(cvError, "error"); }, [cvError, pushToast]);
   const [roleKeywords, setRoleKeywords] = useState("");
   const [country, setCountry] = useState(defaults.country);
   const [language, setLanguage] = useState(defaults.language);
@@ -47,6 +43,8 @@ export function JobFinderSearchClient() {
   const [excludeJobPublishers, setExcludeJobPublishers] = useState("");
   const [page, setPage] = useState("1");
   const [numPages, setNumPages] = useState("1");
+
+  useEffect(() => { const value = localStorage.getItem("myhire-locale") ?? "en-US"; setLocale(value); const next = localeDefaults[value] ?? localeDefaults["en-US"]; setCountry(next.country); setLanguage(next.language); }, []);
 
   const reset = () => {
     setRoleKeywords("");
@@ -71,16 +69,13 @@ export function JobFinderSearchClient() {
     if (!cvId) return pushToast("Select a CV first.", "error");
     if (!roleKeywords.trim()) return pushToast("Role / keywords are required.", "error");
 
-    const cv = cvVersions.find((item) => item.id === cvId);
     setLoading(true);
+    try {
     const response = await fetch("/api/job-finder/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         cvId,
-        cvName: cv?.name,
-        cvSummary: cv?.summary,
-        cvSkills: cv?.skills,
         roleKeywords,
         country,
         language,
@@ -100,6 +95,7 @@ export function JobFinderSearchClient() {
 
     if (!response.ok) return pushToast(payload.error || "Search failed", "error");
     router.push(`/job-finder/results/${payload.searchId}`);
+    } catch { pushToast("Search failed. Please try again.", "error"); } finally { setLoading(false); }
   };
 
   return (
@@ -109,6 +105,7 @@ export function JobFinderSearchClient() {
         <p className="mt-2 text-sm text-muted-foreground">Use your CV profile + filters to find matching openings.</p>
       </div>
 
+      {!cvsLoading && cvVersions.length === 0 ? <p className="card">Add a CV profile in <a href="/files" className="underline">My Files</a> before searching.</p> : null}
       <div className="card grid gap-3 md:grid-cols-2">
         <div>
           <p className="mb-1 text-sm font-medium">CV selector *</p>
@@ -149,7 +146,7 @@ export function JobFinderSearchClient() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button onClick={submit} disabled={loading}><Sparkles size={14} />{loading ? "Searching..." : "Search"}</Button>
+        <Button onClick={submit} disabled={loading || cvsLoading || !cvId || !!cvError}><Sparkles size={14} />{loading ? "Searching..." : "Search"}</Button>
         <Button variant="outline" onClick={reset}>Clear/reset</Button>
       </div>
     </div>

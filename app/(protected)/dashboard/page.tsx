@@ -1,7 +1,6 @@
 import { format, startOfDay, startOfMonth, startOfQuarter, startOfWeek } from "date-fns";
 import Link from "next/link";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, BriefcaseBusiness, ChartNoAxesCombined, Lightbulb, ListFilter, PieChart } from "lucide-react";
-import { enforceOverdueRejections } from "@/lib/actions/overdue";
 import { createClient } from "@/lib/supabase/server";
 import { FunnelChart, PlatformsChart, TrendChart, WeeklyTrendMini } from "@/components/dashboard/charts";
 
@@ -11,12 +10,13 @@ const getBucketDate = (date: Date, range: Range) => range === "day" ? startOfDay
 const getBucketLabel = (date: Date, range: Range) => range === "month" ? format(date, "MMM yyyy") : range === "quarter" ? format(date, "QQQ yyyy") : format(date, "MMM d");
 
 export default async function DashboardPage({ searchParams }: { searchParams?: { range?: string } }) {
-  await enforceOverdueRejections();
   const range = ranges.includes(searchParams?.range as Range) ? (searchParams?.range as Range) : "week";
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: kpi } = await supabase.from("v_user_kpis").select("*").eq("user_id", user!.id).maybeSingle();
-  const { data: jobs } = await supabase.from("v_job_applications_enriched").select("status, platform, applied_at").eq("user_id", user!.id);
+  const { data: kpi, error: kpiError } = await supabase.from("v_user_kpis").select("*").eq("user_id", user!.id).maybeSingle();
+  const { data: jobs, error: jobsError } = await supabase.from("v_job_applications_enriched").select("status, platform, applied_at").eq("user_id", user!.id).eq("archived", false);
+
+  if (kpiError || jobsError) throw new Error("Could not load dashboard data. Please retry.");
 
   const statusMap = new Map<string, number>();
   const platformMap = new Map<string, number>();
@@ -33,11 +33,15 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
   const trendData = Array.from(periodMap.values()).sort((l, r) => l.date.getTime() - r.date.getTime()).map((item) => ({ period: getBucketLabel(item.date, range), count: item.count }));
   const nowBucket = getBucketDate(new Date(), range).getTime();
   const currentPeriodCount = Array.from(periodMap.values()).find((item) => item.date.getTime() === nowBucket)?.count ?? 0;
-  const last = trendData.at(-1)?.count ?? 0;
-  const prev = trendData.at(-2)?.count ?? 0;
+  const last = currentPeriodCount;
+  const previousDate = new Date(nowBucket);
+  if (range === "day") previousDate.setDate(previousDate.getDate() - 1);
+  else if (range === "week") previousDate.setDate(previousDate.getDate() - 7);
+  else previousDate.setMonth(previousDate.getMonth() - (range === "quarter" ? 3 : 1));
+  const prev = periodMap.get(previousDate.toISOString())?.count ?? 0;
   const trendIcon = last > prev ? ArrowUpRight : last < prev ? ArrowDownRight : ArrowRight;
   const trendLabel = last > prev ? "Up" : last < prev ? "Down" : "Stable";
-  const conversionRate = Number(kpi?.app_to_proposal_rate ?? 0);
+  const conversionRate = Number(kpi?.application_to_proposal_rate_pct ?? 0);
   const TrendIcon = trendIcon;
 
   return (
@@ -62,7 +66,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[ ["Applied", kpi?.applied_count ?? 0], ["Proposal", kpi?.proposal_count ?? 0], ["Interview", kpi?.interview_count ?? 0], ["Offer", kpi?.offer_count ?? 0], ["Rejected", kpi?.rejected_count ?? 0], ["No Answer", kpi?.no_answer_count ?? 0], ["Total Active", kpi?.total_active ?? 0], ["Overdue >3w", kpi?.overdue_count ?? 0] ].map(([label, value]) => <div key={String(label)} className="card"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="text-2xl font-bold">{value}</p></div>)}
+        {[ ["Applied", kpi?.applied ?? 0], ["Proposal", kpi?.proposal ?? 0], ["Interview", kpi?.interview ?? 0], ["Offer", kpi?.offer ?? 0], ["Rejected", kpi?.rejected ?? 0], ["No Answer", kpi?.no_answer ?? 0], ["Total Active", kpi?.total_active ?? 0], ["Overdue >3w", kpi?.overdue_over_3_weeks ?? 0] ].map(([label, value]) => <div key={String(label)} className="card"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="text-2xl font-bold">{value}</p></div>)}
       </div>
 
       <div className="card">
@@ -70,7 +74,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
         <p className="text-xl font-semibold">Application → Proposal Rate: <span className="text-indigo-600">{conversionRate.toFixed(1)}%</span></p>
         <ul className="mt-3 space-y-1 text-sm text-slate-700">
           <li className="flex items-start gap-2"><ListFilter size={14} className="mt-0.5 text-indigo-500" />{conversionRate < 15 ? "Your application→proposal rate is low. Refine CV versions per role and focus on higher match opportunities." : "Your proposal conversion looks healthy."}</li>
-          <li className="flex items-start gap-2"><ChartNoAxesCombined size={14} className="mt-0.5 text-indigo-500" />{(kpi?.overdue_count ?? 0) > 0 ? `You have ${kpi?.overdue_count} overdue applications; follow up to increase interview chances.` : "No overdue follow-ups right now."}</li>
+          <li className="flex items-start gap-2"><ChartNoAxesCombined size={14} className="mt-0.5 text-indigo-500" />{(kpi?.overdue_over_3_weeks ?? 0) > 0 ? `You have ${kpi?.overdue_over_3_weeks} overdue applications; follow up to increase interview chances.` : "No overdue follow-ups right now."}</li>
           <li className="flex items-start gap-2"><PieChart size={14} className="mt-0.5 text-indigo-500" />{last < prev ? "Your application volume dropped vs previous period. Aim for consistency this cycle." : "Application volume trend is stable or improving."}</li>
         </ul>
       </div>

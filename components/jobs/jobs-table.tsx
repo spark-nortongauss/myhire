@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
 import { CheckCircle2, CircleOff, Eye, ExternalLink, FileText, Handshake, MessageSquare, Plane, Send, Sparkles, Trash2, Upload, X, type LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useCvs } from "@/lib/use-cvs";
 import type { JobStatus } from "@/types/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ import Link from "next/link";
 const statusOptions: JobStatus[] = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
 const statusTone: Record<JobStatus, string> = { applied: "bg-emerald-100 text-emerald-700 border-emerald-200", proposal: "bg-blue-100 text-blue-700 border-blue-200", interview: "bg-amber-100 text-amber-700 border-amber-200", offer: "bg-violet-100 text-violet-700 border-violet-200", rejected: "bg-rose-100 text-rose-700 border-rose-200", no_answer: "bg-slate-100 text-slate-600 border-slate-200" };
 const statusMeta: Record<JobStatus, { label: string; Icon: LucideIcon }> = { applied: { label: "Applied", Icon: Send }, proposal: { label: "Proposal", Icon: FileText }, interview: { label: "Interview", Icon: MessageSquare }, offer: { label: "Offer", Icon: Handshake }, rejected: { label: "Rejected", Icon: CircleOff }, no_answer: { label: "No answer", Icon: Plane } };
-const cvStorageKey = "myhire-cv-versions";
+
 const COVER_LETTER_MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_COVER_LETTER_TYPES = new Set(["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
 const ALLOWED_COVER_LETTER_EXTENSIONS = [".pdf", ".doc", ".docx", ".txt"];
@@ -49,7 +50,7 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
   const [sourceUrl, setSourceUrl] = useState("");
   const [pageContent, setPageContent] = useState("");
   const [selectedCvId, setSelectedCvId] = useState("");
-  const [cvVersions, setCvVersions] = useState<CvVersion[]>([]);
+  const { cvs: cvVersions, error: cvError } = useCvs();
   const [pending, startTransition] = useTransition();
   const [duplicateWarn, setDuplicateWarn] = useState<any>(null);
   const [previewScore, setPreviewScore] = useState<number | null>(null);
@@ -57,18 +58,19 @@ export function JobsTable({ initialData, userId }: { initialData: any[]; userId:
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(true);
 
-  useEffect(() => { const stored = localStorage.getItem(cvStorageKey); if (!stored) return; const parsed = JSON.parse(stored) as CvVersion[]; setCvVersions(parsed); const defaultCv = parsed.find((item) => item.isDefault) ?? parsed[0]; if (defaultCv) setSelectedCvId(defaultCv.id); }, []);
-  const refresh = async () => { const { data: rows } = await supabase.from("v_job_applications_enriched").select("*").order("applied_at", { ascending: false }); setData(rows ?? []); setSelectedIds([]); };
+  useEffect(() => { const defaultCv = cvVersions.find((item) => item.isDefault) ?? cvVersions[0]; if (defaultCv) setSelectedCvId((previous) => previous || defaultCv.id); }, [cvVersions]);
+  useEffect(() => { if (cvError) pushToast(cvError, "error"); }, [cvError, pushToast]);
+  const refresh = async () => { const { data: rows } = await supabase.from("v_job_applications_enriched").select("*").eq("user_id", userId).order("applied_at", { ascending: false }); setData(rows ?? []); setSelectedIds([]); };
   const updateStatus = async (id: string, status: JobStatus) => { const res = await fetch("/api/jobs/update-status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }); if (!res.ok) { const payload = await res.json().catch(() => ({})); return pushToast(payload.error || "Failed to update status", "error"); } pushToast("Status updated"); refresh(); };
   const deleteSelected = async () => { if (!selectedIds.length) return; const { error } = await supabase.from("job_applications").delete().in("id", selectedIds); if (error) return pushToast(error.message, "error"); setData((prev) => prev.filter((row) => !selectedIds.includes(row.id))); setSelectedIds([]); pushToast("Applications deleted"); setConfirmDeleteOpen(false); };
 
   const runImport = async (bypassDuplicateCheck = false) => {
     const selectedCv = cvVersions.find((item) => item.id === selectedCvId);
-    const res = await fetch("/api/import", { method: "POST", body: JSON.stringify({ url: sourceUrl, content: entryMode === "manual" ? pageContent : "", cvText: selectedCv ? `${selectedCv.summary}\n${selectedCv.skills}` : "", cvFilePath: selectedCv?.filePath ?? null, cvVersionName: selectedCv?.name ?? null, bypassDuplicateCheck }) });
+    const res = await fetch("/api/import", { method: "POST", body: JSON.stringify({ url: sourceUrl, content: entryMode === "manual" ? pageContent : "", cvId: selectedCv?.id, bypassDuplicateCheck }) });
     return { res, payload: await res.json(), selectedCv };
   };
-  const previewImport = async () => { const selectedCv = cvVersions.find((item) => item.id === selectedCvId); const res = await fetch("/api/import", { method: "POST", body: JSON.stringify({ url: sourceUrl, content: entryMode === "manual" ? pageContent : "", cvText: selectedCv ? `${selectedCv.summary}\n${selectedCv.skills}` : "", previewOnly: true }) }); const payload = await res.json(); if (!res.ok) return pushToast(payload.error || "Preview failed", "error"); setPreviewScore(payload.preview?.matchScore ?? null); if (payload.preview?.duplicate) setDuplicateWarn(payload.preview); };
-  const importText = async (bypassDuplicateCheck = false) => { if (!sourceUrl.trim()) return pushToast("Job URL is mandatory", "error"); setProcessingState("processing"); const { res, payload, selectedCv } = await runImport(bypassDuplicateCheck); if (!res.ok) { setProcessingState("idle"); if (res.status === 409) return setDuplicateWarn(payload); return pushToast(payload.error || "AI import failed", "error"); } if (selectedCv) { const { data: jobRow } = await supabase.from("job_applications").select("ai_insights_json").eq("id", payload.jobId).maybeSingle(); await supabase.from("job_applications").update({ ai_insights_json: { ...(jobRow?.ai_insights_json ?? {}), cv_version_id: selectedCv.id, cv_version_name: selectedCv.name } }).eq("id", payload.jobId); }
+  const previewImport = async () => { const selectedCv = cvVersions.find((item) => item.id === selectedCvId); const res = await fetch("/api/import", { method: "POST", body: JSON.stringify({ url: sourceUrl, content: entryMode === "manual" ? pageContent : "", cvId: selectedCv?.id, previewOnly: true }) }); const payload = await res.json(); if (!res.ok) return pushToast(payload.error || "Preview failed", "error"); setPreviewScore(payload.preview?.matchScore ?? null); if (payload.preview?.duplicate) setDuplicateWarn(payload.preview); };
+  const importText = async (bypassDuplicateCheck = false) => { if (!sourceUrl.trim()) return pushToast("Job URL is mandatory", "error"); setProcessingState("processing"); const { res, payload } = await runImport(bypassDuplicateCheck); if (!res.ok) { setProcessingState("idle"); if (res.status === 409) return setDuplicateWarn(payload); return pushToast(payload.error || "AI import failed", "error"); }
     setProcessingState("done"); pushToast("Application created"); setTimeout(() => { setOpen(false); setProcessingState("idle"); setSourceUrl(""); setPageContent(""); setPreviewScore(null); setDuplicateWarn(null); refresh(); }, 700);
   };
   const uploadCoverLetter = async (jobId: string, file: File) => { if (file.size > COVER_LETTER_MAX_BYTES) return pushToast("Cover letter must be 5MB or smaller.", "error"); if (!isAllowedCoverLetter(file)) return pushToast("Allowed types: PDF, DOC, DOCX, TXT", "error"); const path = `${userId}/cover-letter/${jobId}/${Date.now()}-${file.name}`; const { error } = await supabase.storage.from("job-files").upload(path, file, { upsert: true }); if (error) return pushToast(error.message, "error"); await supabase.from("job_applications").update({ cover_letter_file_path: path }).eq("id", jobId); pushToast("Cover letter uploaded"); refresh(); };

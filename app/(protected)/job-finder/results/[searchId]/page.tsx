@@ -12,7 +12,7 @@ export default async function JobFinderResultsPage({ params }: { params: { searc
 
   const { data: search } = await supabase
     .from("job_finder_searches")
-    .select("id,query,country,language,location,remote_only,date_posted,employment_types,job_requirements,total_results")
+    .select("id,generated_query,status,error,country,language,location,remote_only,date_posted,employment_types,job_requirements,total_results")
     .eq("id", params.searchId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -23,6 +23,7 @@ export default async function JobFinderResultsPage({ params }: { params: { searc
     .from("job_finder_results")
     .select("id,job_title,employer_name,employer_logo,job_publisher,job_employment_type,job_is_remote,job_location,job_posted_at,job_salary,job_description,job_apply_link,job_google_link,match_score")
     .eq("search_id", search.id)
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   return <JobFinderResultsClient search={search} results={results ?? []} />;

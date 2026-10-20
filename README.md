@@ -1,6 +1,6 @@
 # MyHire – Job Application Tracker
 
-Production-ready **Next.js + Supabase** app to track applications, automate URL imports, and visualize pipeline performance.
+**Next.js + Supabase** app to track applications, automate URL imports, and visualize pipeline performance.
 
 ## Features
 - ✅ Supabase Auth (email/password + magic link)
@@ -11,7 +11,7 @@ Production-ready **Next.js + Supabase** app to track applications, automate URL 
 - ✅ Add job manually or import from URL
 - ✅ Best-effort URL extraction (`@mozilla/readability` + JSDOM)
 - ✅ Optional AI insights from OpenAI (if key provided)
-- ✅ Overdue auto-reject after 21 days for `applied` + `no_answer`
+- ✅ Read-only overdue reminders after 21 days; status changes are explicit
 - ✅ File uploads (CV + Cover Letter) to Supabase Storage (`job-files` private bucket)
 - ✅ Settings page for profile/defaults
 - ✅ Tailwind UI + subtle Three.js + GSAP login animation with reduce-motion toggle
@@ -74,8 +74,9 @@ OPENAI_API_KEY=...
 UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
 
-# Optional server-side key
-SUPABASE_SERVICE_ROLE_KEY=...
+# Job Finder provider (server-side only)
+RAPIDAPI_KEY=...
+RAPIDAPI_HOST=jsearch.p.rapidapi.com
 ```
 
 Where to find each value:
@@ -130,13 +131,17 @@ Then open `http://localhost:3000`.
 
 > Some websites block automated scraping. If import fails, users can still add jobs manually.
 
-## Overdue auto-reject rule
-On dashboard/jobs load and via `POST /api/overdue`:
-- If status is `applied` or `no_answer`
-- and `applied_at` is older than 21 days
-- then app updates status to `rejected`
+## CV persistence and overdue reminders
+CV profiles are stored in `public.user_cvs`; PDFs remain in the private `job-files` bucket.
+All CV selectors load account data from `/api/cvs`. Summary and skills are entered by the user; uploading a PDF alone does not parse its contents.
+Existing browser profiles can be recovered from **My Files → Import browser CV profiles** on the original browser. Confirm they belong to your account. Foreign-account file paths are excluded; local data is removed only after successful imports. Deleting a CV profile also deletes its saved searches, but retains files referenced by existing applications.
 
-This operation is idempotent and safe to run repeatedly.
+Applications older than 21 days are flagged for follow-up without changing their status. `rejected` must be selected explicitly. The legacy `/api/overdue` endpoint returns HTTP 410, and its old database RPC is disabled.
+
+## Database update and regression checks
+Apply `supabase/migrations/20261020133653_secure_cvs_and_job_search.sql` to an existing MyHire database before deploying this code. It secures views and RPC permissions, supports text-only CV profiles, and adds atomic default-CV selection and parent-ownership constraints. The cleanup of the previous search is intentionally **not** part of the migration.
+
+Run `npm test`, `npm run typecheck`, and `npm run build`. `tests/database-regression.sql` exercises RLS, KPI values, CV defaults, search persistence and overdue behavior against the migrated database, with all fixtures rolled back. Provider API calls in automated tests are mocked; production OpenAI/JSearch credentials must be configured independently.
 
 ## Tech stack
 - Next.js App Router + TypeScript

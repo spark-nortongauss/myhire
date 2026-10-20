@@ -10,14 +10,15 @@ import { inferPlatform, inferWorkMode } from "@/lib/jobs";
 import { safeFetchHtml, validateUrlForFetch } from "@/lib/security/import-security";
 import { enforceImportRateLimits } from "@/lib/security/rate-limit";
 
-const supportedJobPlatforms = ["linkedin", "indeed", "wellfound", "other"] as const;
+const supportedJobPlatforms = ["linkedin", "indeed", "apec", "france_travail", "welcome_to_the_jungle", "glassdoor", "company_website", "referral", "other"] as const;
 
 const importRequestSchema = z.object({
   url: z.string().trim().url("Invalid URL").max(2000),
+  cvId: z.string().uuid().optional(),
   cvText: z.string().trim().max(30000).optional().default(""),
   content: z.string().trim().max(30000).optional().default(""),
-  cvFilePath: z.string().trim().max(400).optional().default(""),
-  cvVersionName: z.string().trim().max(200).optional().default(""),
+  cvFilePath: z.string().trim().max(400).nullish().transform((value) => value || ""),
+  cvVersionName: z.string().trim().max(200).nullish().transform((value) => value || ""),
   previewOnly: z.boolean().optional().default(false),
   bypassDuplicateCheck: z.boolean().optional().default(false)
 });
@@ -146,7 +147,16 @@ export async function POST(request: Request) {
   const parsedBody = importRequestSchema.safeParse(body);
   if (!parsedBody.success) return NextResponse.json({ error: parsedBody.error.issues[0]?.message ?? "Invalid request payload" }, { status: 400 });
 
-  const { url, content, cvText, cvFilePath, cvVersionName, previewOnly, bypassDuplicateCheck } = parsedBody.data;
+  const { url, content, cvId, previewOnly, bypassDuplicateCheck } = parsedBody.data;
+  let { cvText, cvFilePath, cvVersionName } = parsedBody.data;
+  if (cvId) {
+    const { data: cv } = await supabase.from("user_cvs").select("name,parsed_text,parsed_skills,file_path").eq("id", cvId).eq("user_id", user.id).maybeSingle();
+    if (!cv) return NextResponse.json({ error: "CV profile not found" }, { status: 404 });
+    cvText = `${cv.parsed_text ?? ""}\n${(cv.parsed_skills ?? []).join(", ")}`;
+    cvFilePath = cv.file_path ?? ""; cvVersionName = cv.name;
+  }
+  // Older extension clients may send a filename, but never an account storage reference.
+  if (cvFilePath && !cvFilePath.startsWith(`${user.id}/`)) cvFilePath = "";
 
   if (!content) {
     try {
@@ -216,7 +226,7 @@ export async function POST(request: Request) {
           {
             role: "user",
             content:
-              "Return JSON with keys: title, company, location, country, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|wellfound|other), brief_description(max 300 chars), clean_job_description(only the job description content), recruitment_timeline(array of interview/recruitment stages if present), keywords(array max 30), bullet_insights(array max 5), risk_flags(array max 20). Input:\n" +
+              "Return JSON with keys: title, company, location, country, work_mode(remote|hybrid|on_site|unknown), platform(linkedin|indeed|apec|france_travail|welcome_to_the_jungle|glassdoor|company_website|referral|other), brief_description(max 300 chars), clean_job_description(only the job description content), recruitment_timeline(array of interview/recruitment stages if present), keywords(array max 30), bullet_insights(array max 5), risk_flags(array max 20). Input:\n" +
               description
           }
         ]
@@ -248,7 +258,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const normalizedMatchScore = Number(aiSummary.match_score);
+    const normalizedMatchScore = aiSummary.match_score == null ? Number.NaN : Number(aiSummary.match_score);
     const safeMatchScore = Number.isFinite(normalizedMatchScore) ? Math.max(0, Math.min(100, Math.round(normalizedMatchScore))) : null;
 
     const aiWorkMode = ["remote", "hybrid", "on_site"].includes(String(aiSummary.work_mode)) ? aiSummary.work_mode : workMode;
@@ -274,6 +284,7 @@ export async function POST(request: Request) {
     }
 
     if (duplicate && !bypassDuplicateCheck) {
+      await supabase.from("job_imports").update({ status: "duplicate", extracted_job: aiSummary }).eq("id", importId).eq("user_id", user.id);
       return NextResponse.json({ error: "Duplicate detected", duplicate, duplicateAgeDays, duplicateOlderThan3Weeks: duplicateAgeDays != null && duplicateAgeDays > 21 }, { status: 409 });
     }
 
@@ -291,6 +302,7 @@ export async function POST(request: Request) {
         platform: normalizeJobPlatform(aiSummary.platform) ?? normalizeJobPlatform(platform),
         work_mode: aiWorkMode,
         location: finalLocation,
+        country: finalCountry,
         salary_text: salaryText,
         ai_insights: (Array.isArray(aiSummary.bullet_insights) ? aiSummary.bullet_insights : []).map((x) => `• ${x}`).join("\n") || null,
         ai_insights_json: {
@@ -300,7 +312,8 @@ export async function POST(request: Request) {
           current_timeline_stage: 0,
           match_score: safeMatchScore,
           cv_file_path: cvFilePath || null,
-          cv_version_name: cvVersionName || null
+          cv_version_name: cvVersionName || null,
+          cv_version_id: cvId || null
         },
         match_score: safeMatchScore,
         cv_file_path: cvFilePath || null,
@@ -310,14 +323,15 @@ export async function POST(request: Request) {
       .single();
 
     if (jobErr) {
-      await supabase.from("job_imports").update({ status: "failed", error_message: jobErr.message }).eq("id", importId);
+      await supabase.from("job_imports").update({ status: "failed", error: jobErr.message }).eq("id", importId);
       return NextResponse.json({ error: `Failed to create job application: ${jobErr.message}` }, { status: 500 });
     }
 
-    await supabase.from("job_imports").update({ status: "done", created_job_application_id: createdJob?.id ?? null, extracted_payload: aiSummary }).eq("id", importId);
+    const { error: importUpdateError } = await supabase.from("job_imports").update({ status: "done", created_job_application_id: createdJob?.id ?? null, extracted_job: aiSummary }).eq("id", importId);
+    if (importUpdateError) console.error("Import log could not be finalized", { code: importUpdateError.code });
     return NextResponse.json({ ok: true, jobId: createdJob?.id ?? null });
   } catch (error) {
-    if (!previewOnly) await supabase.from("job_imports").update({ status: "failed", error_message: String(error) }).eq("id", importId);
+    if (!previewOnly) await supabase.from("job_imports").update({ status: "failed", error: String(error) }).eq("id", importId);
     return NextResponse.json({ error: "Import failed. Please complete manual entry." }, { status: 500 });
   }
 }

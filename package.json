@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
@@ -22,13 +23,13 @@
     "gsap": "^3.12.5",
     "jsdom": "^25.0.1",
     "lucide-react": "^0.453.0",
-    "next": "14.2.15",
+    "next": "14.2.35",
     "openai": "^4.67.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "recharts": "^2.12.7",
-    "three": "^0.169.0",
     "tailwind-merge": "^2.5.3",
+    "three": "^0.169.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -38,9 +39,10 @@
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.15",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "3.2.4"
   }
 }

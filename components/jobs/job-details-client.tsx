@@ -20,7 +20,7 @@ const isRemoteMode = (mode?: string | null) => (mode || "").toLowerCase().includ
 const flagFromCountry = (country?: string | null, mode?: string | null) => (isRemoteMode(mode) ? <Plane size={16} className="inline" /> : <span>{country ? country.slice(0, 2).toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0))) : "-"}</span>);
 
 const statusOptions = ["applied", "proposal", "interview", "offer", "rejected", "no_answer"];
-const platformOptions = ["linkedin", "indeed", "wellfound", "other"];
+const platformOptions = ["linkedin", "indeed", "apec", "france_travail", "welcome_to_the_jungle", "glassdoor", "company_website", "referral", "other"];
 const workModeOptions = ["remote", "hybrid", "on_site"];
 
 export function JobDetailsClient({ data }: { data: any }) {
@@ -143,12 +143,7 @@ export function JobDetailsClient({ data }: { data: any }) {
   };
 
   const generateCoverLetter = async () => {
-    const localCv = localStorage.getItem("myhire-cv-versions");
-    const cvVersions = localCv ? JSON.parse(localCv) : [];
-    const cvId = row.ai_insights_json?.cv_version_id;
-    const cv = cvVersions.find((item: any) => item.id === cvId) ?? cvVersions.find((item: any) => item.isDefault) ?? cvVersions[0];
-    const cvText = cv ? `${cv.summary}\n${cv.skills}` : "";
-    const res = await fetch("/api/cover-letter", { method: "POST", body: JSON.stringify({ jobId: row.id, cvText }) });
+    const res = await fetch("/api/cover-letter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId: row.id }) });
     const payload = await res.json();
     if (!res.ok) return alert(payload.error || "Generation failed");
     setCoverLetter(payload.letter);

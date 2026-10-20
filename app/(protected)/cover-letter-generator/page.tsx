@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast-provider";
 
-type CvVersion = { id: string; name: string; summary: string; skills: string; isDefault?: boolean };
+import { useCvs } from "@/lib/use-cvs";
 type JobOption = { id: string; job_title: string; company_name: string | null };
 
 export default function CoverLetterGeneratorPage() {
@@ -18,7 +18,7 @@ export default function CoverLetterGeneratorPage() {
   const { pushToast } = useToast();
   const [jobs, setJobs] = useState<JobOption[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
-  const [cvVersions, setCvVersions] = useState<CvVersion[]>([]);
+  const { cvs: cvVersions, error: cvError } = useCvs();
   const [selectedCvId, setSelectedCvId] = useState("");
   const [letter, setLetter] = useState("");
   const [displayLetter, setDisplayLetter] = useState("");
@@ -30,12 +30,13 @@ export default function CoverLetterGeneratorPage() {
       setJobs(data ?? []);
       if (data?.length) setSelectedJobId(data[0].id);
     })();
-    const stored = localStorage.getItem("myhire-cv-versions");
-    const parsed = stored ? (JSON.parse(stored) as CvVersion[]) : [];
-    setCvVersions(parsed);
-    const defaultCv = parsed.find((item) => item.isDefault) ?? parsed[0];
-    if (defaultCv) setSelectedCvId(defaultCv.id);
   }, [supabase]);
+
+  useEffect(() => {
+    const cv = cvVersions.find((item) => item.isDefault) ?? cvVersions[0];
+    if (cv) setSelectedCvId((previous) => previous || cv.id);
+  }, [cvVersions]);
+  useEffect(() => { if (cvError) pushToast(cvError, "error"); }, [cvError, pushToast]);
 
   useEffect(() => {
     if (!letter) return setDisplayLetter("");
@@ -52,12 +53,14 @@ export default function CoverLetterGeneratorPage() {
     if (!selectedJobId) return;
     setLoading(true);
     const cv = cvVersions.find((item) => item.id === selectedCvId);
-    const response = await fetch("/api/cover-letter", { method: "POST", body: JSON.stringify({ jobId: selectedJobId, cvText: cv ? `${cv.summary}\n${cv.skills}` : "" }) });
+    try {
+    const response = await fetch("/api/cover-letter", { method: "POST", body: JSON.stringify({ jobId: selectedJobId, cvId: cv?.id ?? null }) });
     const payload = await response.json();
     setLoading(false);
     if (!response.ok) return pushToast(payload.error || "Generation failed", "error");
     setLetter(payload.letter || "");
     pushToast("Cover letter generated");
+    } catch { pushToast("Could not generate a cover letter. Please retry.", "error"); } finally { setLoading(false); }
   };
 
   const copyLetter = async () => {
