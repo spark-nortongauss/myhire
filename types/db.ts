@@ -1,10 +1,12 @@
 export type JobStatus =
+  | "not_applied"
   | "applied"
   | "proposal"
   | "interview"
   | "offer"
   | "rejected"
-  | "no_answer";
+  | "no_answer"
+  | "withdrawn";
 
 export type Platform = "linkedin" | "indeed" | "apec" | "france_travail" | "welcome_to_the_jungle" | "glassdoor" | "company_website" | "referral" | "other";
 export type WorkMode = "remote" | "hybrid" | "on_site";

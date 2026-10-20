@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Keep the label readable while drawing attention to opportunities to apply. */
+@keyframes not-applied-pulse {
+  0%, 100% { background-color: #fff1f2; box-shadow: 0 0 0 0 rgb(225 29 72 / 0); }
+  50% { background-color: #fecdd3; box-shadow: 0 0 0 4px rgb(225 29 72 / .14); }
+}
+.not-applied-status {
+  color: #be123c;
+  background-color: #fff1f2;
+  border: 1px solid #fda4af;
+  animation: not-applied-pulse 1.8s ease-in-out infinite;
+  white-space: nowrap;
+}
+
 :root {
   --background: 247 250 255;
   --foreground: 15 23 42;
