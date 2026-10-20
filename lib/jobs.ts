@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { differenceInCalendarDays } from "date-fns";
 import type { Platform, WorkMode } from "@/types/db";
 import { ensureInterviewPrepForJob } from "@/lib/interview-prep/data";
+import { isJobStatus } from "@/lib/job-status";
 
 export function inferPlatform(url: string): Platform {
   const lower = url.toLowerCase();
@@ -36,6 +37,9 @@ export async function updateJobApplication(supabase: DBClient, userId: string, j
   if (!userId || !jobId) return { ok: false, error: "Missing identifiers" };
 
   const nextPayload = { ...payload };
+  if ("status" in nextPayload && !isJobStatus(nextPayload.status)) {
+    return { ok: false, error: "Invalid application status" };
+  }
   const urlValue = typeof nextPayload.job_url === "string" ? nextPayload.job_url.trim() : nextPayload.job_url;
   if (typeof urlValue === "string" && urlValue.length > 2000) {
     return { ok: false, error: "job_url is too long (max 2000 characters)" };

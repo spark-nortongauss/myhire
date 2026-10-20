@@ -112,6 +112,27 @@ a {
 .skip-link {
   @apply fixed left-4 top-4 z-50 -translate-y-24 rounded bg-panel p-3 focus:translate-y-0;
 }
+
+/* Preserve the discovered-opportunity attention state from the scheduled-import feature. */
+@keyframes not-applied-pulse {
+  0%,
+  100% {
+    background-color: #fff1f2;
+    box-shadow: 0 0 0 0 rgb(225 29 72 / 0);
+  }
+  50% {
+    background-color: #fecdd3;
+    box-shadow: 0 0 0 4px rgb(225 29 72 / 0.14);
+  }
+}
+.not-applied-status {
+  color: #be123c;
+  background-color: #fff1f2;
+  border: 1px solid #fda4af;
+  animation: not-applied-pulse 1.8s ease-in-out infinite;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

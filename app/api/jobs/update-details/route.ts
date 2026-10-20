@@ -8,6 +8,7 @@ const schema = z
     job_title: z.string().trim().min(1).max(500),
     company_name: z.string().trim().min(1).max(500),
     status: z.enum([
+      "not_applied",
       "applied",
       "proposal",
       "interview",
@@ -40,7 +41,7 @@ const schema = z
     salary_max: z.number().nonnegative().nullable(),
     salary_currency: z.string().max(10),
     match_score: z.number().min(0).max(100).nullable(),
-    applied_at: z.string().date(),
+    applied_at: z.string().date().nullable(),
     last_activity_at: z.string().datetime().nullable(),
     brief_description: text,
     job_description: text,

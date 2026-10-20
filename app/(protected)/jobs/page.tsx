@@ -12,7 +12,7 @@ export default async function JobsPage() {
     .from("v_job_applications_enriched")
     .select("*")
     .eq("user_id", user!.id)
-    .order("applied_at", { ascending: false });
+    .order("created_at", { ascending: false });
 
   if (error) throw new Error("Não foi possível carregar as candidaturas.");
   return (

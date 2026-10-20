@@ -43,8 +43,8 @@ export function JobsTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState({ title: "", company: "", status: "" });
   const [sortBy, setSortBy] = useState<
-    "applied_at" | "job_title" | "company_name"
-  >("applied_at");
+    "created_at" | "applied_at" | "job_title" | "company_name"
+  >("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [open, setOpen] = useState(false);
   const [entryMode, setEntryMode] = useState<"url" | "manual">("url");
@@ -89,7 +89,7 @@ export function JobsTable({
       .from("v_job_applications_enriched")
       .select("*")
       .eq("user_id", userId)
-      .order("applied_at", { ascending: false });
+      .order("created_at", { ascending: false });
     if (error) return pushToast("Não foi possível atualizar a lista.", "error");
     setData(rows ?? []);
     setSelectedIds([]);
@@ -172,9 +172,9 @@ export function JobsTable({
         (!filter.status || row.status === filter.status),
     );
     return rows.sort((a, b) => {
-      const left = a[sortBy] ?? "";
-      const right = b[sortBy] ?? "";
-      if (sortBy === "applied_at")
+      const left = a[sortBy] ?? a.created_at ?? "";
+      const right = b[sortBy] ?? b.created_at ?? "";
+      if (sortBy === "applied_at" || sortBy === "created_at")
         return sortDir === "desc"
           ? new Date(right).getTime() - new Date(left).getTime()
           : new Date(left).getTime() - new Date(right).getTime();
@@ -247,6 +247,7 @@ export function JobsTable({
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
             >
+              <option value="created_at">Data de inclusão</option>
               <option value="applied_at">Data da candidatura</option>
               <option value="company_name">Empresa</option>
               <option value="job_title">Cargo</option>
@@ -296,7 +297,7 @@ export function JobsTable({
           description="Ajuste os filtros ou adicione uma nova oportunidade."
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-panel">
+        <div className="relative overflow-x-auto rounded-xl border border-border bg-panel">
           <table className="w-full min-w-[760px] text-sm">
             <thead className="text-left text-xs text-muted-foreground">
               <tr>
@@ -354,7 +355,9 @@ export function JobsTable({
                       </Link>
                     </td>
                     <td className="p-4">
-                      <span className="tag">
+                      <span
+                        className={`tag ${row.status === "not_applied" ? "not-applied-status" : ""}`}
+                      >
                         {statusLabels[row.status] || row.status}
                       </span>
                     </td>

@@ -148,12 +148,16 @@ export function JobDetailsClient({
               · {workLabels[data.work_mode] || "Regime a confirmar"}
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <span className="tag">
+              <span
+                className={`tag ${data.status === "not_applied" ? "not-applied-status" : ""}`}
+              >
                 {statusLabels[data.status] || data.status}
               </span>
               {data.archived && <span className="tag">Arquivada</span>}
               <span className="text-xs text-muted-foreground">
-                Candidatura / contato em {dateLabel(data.applied_at)}
+                {data.applied_at
+                  ? `Candidatura / contato em ${dateLabel(data.applied_at)}`
+                  : "Ainda não aplicada"}
               </span>
               {safeWebUrl(data.job_url) && (
                 <a
@@ -519,6 +523,8 @@ export function JobDetailsClient({
             e.preventDefault();
             const payload = {
               ...form,
+              applied_at:
+                form.status === "not_applied" ? null : form.applied_at || null,
               salary_min:
                 form.salary_min === "" ? null : Number(form.salary_min),
               salary_max:
@@ -551,11 +557,10 @@ export function JobDetailsClient({
               <label className="field" key={key}>
                 {label}
                 <Input
-                  required={[
-                    "job_title",
-                    "company_name",
-                    "applied_at",
-                  ].includes(key)}
+                  required={
+                    ["job_title", "company_name"].includes(key) ||
+                    (key === "applied_at" && form.status !== "not_applied")
+                  }
                   maxLength={key === "job_url" ? 2000 : undefined}
                   type={
                     key === "job_url"

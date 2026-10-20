@@ -36,6 +36,7 @@ export type StoryLink = {
   story_id: string;
 };
 export const statusLabels: Record<string, string> = {
+  not_applied: "Not Applied",
   applied: "Candidatura enviada",
   proposal: "Proposta inicial",
   interview: "Entrevista",
@@ -51,7 +52,8 @@ export const workLabels: Record<string, string> = {
   unknown: "A confirmar",
 };
 export const isActiveJob = (job: { archived?: boolean; status: string }) =>
-  !job.archived && !["rejected", "withdrawn", "offer"].includes(job.status);
+  !job.archived &&
+  !["not_applied", "rejected", "withdrawn", "offer"].includes(job.status);
 export const dateLabel = (
   value: string | null,
   timeZone = "Europe/Paris",

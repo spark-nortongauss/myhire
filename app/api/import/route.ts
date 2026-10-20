@@ -295,7 +295,7 @@ export async function POST(request: Request) {
         user_id: user.id,
         job_title: finalTitle,
         company_name: finalCompany,
-        status: "applied",
+        status: "not_applied",
         job_description: cleanDescription,
         brief_description: String(aiSummary.brief_description || cleanDescription.slice(0, 400)),
         job_url: url,
@@ -317,7 +317,7 @@ export async function POST(request: Request) {
         },
         match_score: safeMatchScore,
         cv_file_path: cvFilePath || null,
-        applied_at: new Date().toISOString().slice(0, 10)
+        applied_at: null
       })
       .select("id")
       .single();
