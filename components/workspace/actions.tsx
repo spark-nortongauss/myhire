@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,14 @@ export function Actions({
   const { save, busy } = useMutation();
   const [editing, setEditing] = useState<Partial<Action> | null>(null),
     [showDone, setShowDone] = useState(false);
-  const pending = items.filter((a) => !a.completed),
-    shown = showDone ? items : pending;
+  const [optimistic, setOptimistic] = useState<Record<string, boolean>>({});
+  useEffect(() => setOptimistic({}), [items]);
+  const visibleItems = items.map((a) => ({
+    ...a,
+    completed: optimistic[a.id] ?? a.completed,
+  }));
+  const pending = visibleItems.filter((a) => !a.completed),
+    shown = showDone ? visibleItems : pending;
   return (
     <section className="card space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -66,9 +72,18 @@ export function Actions({
               aria-label={`Concluir: ${a.title}`}
               checked={a.completed}
               disabled={busy}
-              onChange={() =>
-                save("actions", { ...values(a), completed: !a.completed }, a.id)
-              }
+              onChange={async () => {
+                const completed = !a.completed;
+                setOptimistic((previous) => ({
+                  ...previous,
+                  [a.id]: completed,
+                }));
+                if (!(await save("actions", { ...values(a), completed }, a.id)))
+                  setOptimistic((previous) => ({
+                    ...previous,
+                    [a.id]: a.completed,
+                  }));
+              }}
             />
             <div className="min-w-0 flex-1">
               <p
@@ -118,7 +133,7 @@ export function Actions({
           </div>
         ))}
       </div>
-      {items.some((a) => a.completed) && (
+      {visibleItems.some((a) => a.completed) && (
         <Button variant="ghost" onClick={() => setShowDone(!showDone)}>
           {showDone ? "Ocultar concluídas" : "Ver concluídas"}
         </Button>
