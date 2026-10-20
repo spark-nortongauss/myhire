@@ -1,89 +1,200 @@
-import { format, startOfDay, startOfMonth, startOfQuarter, startOfWeek } from "date-fns";
 import Link from "next/link";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, BriefcaseBusiness, ChartNoAxesCombined, Lightbulb, ListFilter, PieChart } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  ArrowRight,
+  BriefcaseBusiness,
+  Building2,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { FunnelChart, PlatformsChart, TrendChart, WeeklyTrendMini } from "@/components/dashboard/charts";
-
-const ranges = ["day", "week", "month", "quarter"] as const;
-type Range = (typeof ranges)[number];
-const getBucketDate = (date: Date, range: Range) => range === "day" ? startOfDay(date) : range === "week" ? startOfWeek(date, { weekStartsOn: 1 }) : range === "month" ? startOfMonth(date) : startOfQuarter(date);
-const getBucketLabel = (date: Date, range: Range) => range === "month" ? format(date, "MMM yyyy") : range === "quarter" ? format(date, "QQQ yyyy") : format(date, "MMM d");
-
-export default async function DashboardPage({ searchParams }: { searchParams?: { range?: string } }) {
-  const range = ranges.includes(searchParams?.range as Range) ? (searchParams?.range as Range) : "week";
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: kpi, error: kpiError } = await supabase.from("v_user_kpis").select("*").eq("user_id", user!.id).maybeSingle();
-  const { data: jobs, error: jobsError } = await supabase.from("v_job_applications_enriched").select("status, platform, applied_at").eq("user_id", user!.id).eq("archived", false);
-
-  if (kpiError || jobsError) throw new Error("Could not load dashboard data. Please retry.");
-
-  const statusMap = new Map<string, number>();
-  const platformMap = new Map<string, number>();
-  const periodMap = new Map<string, { date: Date; count: number }>();
-  for (const row of jobs ?? []) {
-    statusMap.set(row.status, (statusMap.get(row.status) ?? 0) + 1);
-    if (row.platform) platformMap.set(row.platform, (platformMap.get(row.platform) ?? 0) + 1);
-    if (!row.applied_at) continue;
-    const date = getBucketDate(new Date(row.applied_at), range);
-    const key = date.toISOString();
-    periodMap.set(key, { date, count: (periodMap.get(key)?.count ?? 0) + 1 });
-  }
-
-  const trendData = Array.from(periodMap.values()).sort((l, r) => l.date.getTime() - r.date.getTime()).map((item) => ({ period: getBucketLabel(item.date, range), count: item.count }));
-  const nowBucket = getBucketDate(new Date(), range).getTime();
-  const currentPeriodCount = Array.from(periodMap.values()).find((item) => item.date.getTime() === nowBucket)?.count ?? 0;
-  const last = currentPeriodCount;
-  const previousDate = new Date(nowBucket);
-  if (range === "day") previousDate.setDate(previousDate.getDate() - 1);
-  else if (range === "week") previousDate.setDate(previousDate.getDate() - 7);
-  else previousDate.setMonth(previousDate.getMonth() - (range === "quarter" ? 3 : 1));
-  const prev = periodMap.get(previousDate.toISOString())?.count ?? 0;
-  const trendIcon = last > prev ? ArrowUpRight : last < prev ? ArrowDownRight : ArrowRight;
-  const trendLabel = last > prev ? "Up" : last < prev ? "Down" : "Stable";
-  const conversionRate = Number(kpi?.application_to_proposal_rate_pct ?? 0);
-  const TrendIcon = trendIcon;
-
+import { getWorkspace } from "@/lib/workspace/data";
+import { dateLabel, isActiveJob } from "@/lib/workspace/types";
+import { CompanyMark } from "@/components/workspace/shared";
+import { Actions } from "@/components/workspace/actions";
+export default async function DashboardPage() {
+  const db = await createClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  const [result, workspace, profile] = await Promise.all([
+    db
+      .from("job_applications")
+      .select("*")
+      .eq("user_id", user!.id)
+      .eq("archived", false),
+    getWorkspace(),
+    db
+      .from("user_profiles")
+      .select("full_name")
+      .eq("id", user!.id)
+      .maybeSingle(),
+  ]);
+  if (result.error)
+    throw new Error("Não foi possível carregar suas candidaturas.");
+  const jobs = result.data || [],
+    active = jobs.filter(isActiveJob),
+    activeIds = new Set(active.map((j) => j.id));
+  const upcoming = workspace.interviews.filter(
+    (i) =>
+      i.status === "scheduled" &&
+      Date.parse(i.starts_at) >= Date.now() &&
+      activeIds.has(i.job_application_id),
+  );
+  const next = upcoming[0],
+    job = next ? jobs.find((j) => j.id === next.job_application_id) : null;
+  const actions = workspace.actions.filter((a) =>
+    activeIds.has(a.job_application_id),
+  );
+  const name = profile.data?.full_name?.split(" ")[0] || "bem-vindo";
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Live view of your pipeline performance and hiring momentum.</p>
+          <h1 className="page-title">Olá, {name}</h1>
+          <p className="page-subtitle">Seu próximo passo, com clareza.</p>
         </div>
-        <div className="inline-flex rounded-xl border border-border/70 bg-panel/90 p-1">
-          {ranges.map((item) => <Link key={item} href={`/dashboard?range=${item}`} className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${range === item ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-muted"}`}>{item}</Link>)}
+        <Link href="/jobs?new=1" className="primary-link">
+          + Nova candidatura
+        </Link>
+      </div>
+      <div className="card grid grid-cols-1 gap-5 sm:grid-cols-3 sm:divide-x sm:divide-border">
+        {[
+          [BriefcaseBusiness, active.length, "candidaturas ativas"],
+          [CalendarDays, upcoming.length, "entrevistas agendadas"],
+          [
+            Building2,
+            new Set(active.map((j) => j.company_name)).size,
+            "empresas",
+          ],
+        ].map(([Icon, n, label]: any) => (
+          <div key={label} className="flex items-center gap-4 sm:px-4">
+            <span className="rounded-full bg-primary/10 p-3 text-primary">
+              <Icon size={22} />
+            </span>
+            <div>
+              <p className="text-2xl font-bold">{n}</p>
+              <p className="text-sm text-muted-foreground">{label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <div className="space-y-6">
+          <section className="card space-y-6">
+            <p className="text-xs font-semibold tracking-wide text-primary">
+              PRÓXIMA ENTREVISTA
+            </p>
+            {next && job ? (
+              <>
+                <div className="flex items-start gap-4">
+                  <CompanyMark name={job.company_name} />
+                  <div>
+                    <h2 className="text-xl font-bold">{job.job_title}</h2>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {job.company_name}
+                    </p>
+                    <p className="mt-4 flex items-center gap-2 text-sm">
+                      <CalendarDays size={17} />
+                      {dateLabel(next.starts_at, next.time_zone, true)} ·{" "}
+                      {next.duration_minutes} min
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {next.interviewer} · {next.time_zone}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={`/jobs/${job.id}?tab=preparation`}
+                    className="primary-link"
+                  >
+                    Preparar entrevista
+                  </Link>
+                  <Link href={`/jobs/${job.id}`} className="secondary-link">
+                    Ver candidatura
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div>
+                <h2 className="text-lg font-semibold">
+                  Seu próximo encontro aparecerá aqui.
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Abra uma candidatura para adicionar entrevistas e organizar a
+                  preparação.
+                </p>
+                <Link href="/jobs" className="mt-4 secondary-link">
+                  Ver candidaturas
+                </Link>
+              </div>
+            )}
+          </section>
+          <Actions items={actions} jobs={jobs} />
+          <Link href="/preparation" className="card flex items-center gap-4">
+            <BookOpen className="text-primary" />
+            <div className="flex-1">
+              <h2 className="font-semibold">Histórias STAR</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {workspace.stories.length
+                  ? `${workspace.stories.length} histórias na sua biblioteca.`
+                  : "Seu repertório de experiências para as entrevistas."}
+              </p>
+            </div>
+            <ArrowRight className="text-primary" />
+          </Link>
         </div>
+        <section className="card">
+          <h2 className="mb-6 text-xl font-semibold">Agenda</h2>
+          {!upcoming.length && (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma entrevista futura.
+            </p>
+          )}
+          <div className="space-y-6">
+            {upcoming.map((i) => (
+              <Link
+                key={i.id}
+                href={`/jobs/${i.job_application_id}?tab=preparation`}
+                className="block border-l-2 border-primary/25 pl-4 hover:border-primary"
+              >
+                <p className="text-xs font-semibold text-primary">
+                  {dateLabel(i.starts_at, i.time_zone, true)}
+                </p>
+                <p className="mt-2 text-sm font-medium">{i.interviewer}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {
+                    jobs.find((j) => j.id === i.job_application_id)
+                      ?.company_name
+                  }
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {i.time_zone}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
-
-      <div className="card flex items-center justify-between border-indigo-100">
-        <div>
-          <p className="text-sm text-muted-foreground">Applications in current {range}</p>
-          <p className="mt-1 flex items-center gap-2 text-3xl font-black text-indigo-600"><BriefcaseBusiness size={20} />{currentPeriodCount}</p>
-          <p className="mt-1 flex items-center gap-1 text-sm text-slate-600"><TrendIcon size={14} className="text-indigo-500" /> {trendLabel} vs previous ({prev})</p>
+      <details className="text-sm">
+        <summary className="cursor-pointer text-muted-foreground">
+          Ver resultados da busca
+        </summary>
+        <div className="mt-3 flex flex-wrap gap-4 rounded-lg border border-border p-4">
+          {[
+            ["Enviadas", "applied"],
+            ["Entrevistas", "interview"],
+            ["Ofertas", "offer"],
+            ["Recusadas", "rejected"],
+            ["Sem resposta", "no_answer"],
+          ].map(([label, status]) => (
+            <span key={status}>
+              {label}:{" "}
+              <strong>{jobs.filter((j) => j.status === status).length}</strong>
+            </span>
+          ))}
         </div>
-        <WeeklyTrendMini data={trendData} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[ ["Applied", kpi?.applied ?? 0], ["Proposal", kpi?.proposal ?? 0], ["Interview", kpi?.interview ?? 0], ["Offer", kpi?.offer ?? 0], ["Rejected", kpi?.rejected ?? 0], ["No Answer", kpi?.no_answer ?? 0], ["Total Active", kpi?.total_active ?? 0], ["Overdue >3w", kpi?.overdue_over_3_weeks ?? 0] ].map(([label, value]) => <div key={String(label)} className="card"><p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p><p className="text-2xl font-bold">{value}</p></div>)}
-      </div>
-
-      <div className="card">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground"><Lightbulb size={14} /> Insights</p>
-        <p className="text-xl font-semibold">Application → Proposal Rate: <span className="text-indigo-600">{conversionRate.toFixed(1)}%</span></p>
-        <ul className="mt-3 space-y-1 text-sm text-slate-700">
-          <li className="flex items-start gap-2"><ListFilter size={14} className="mt-0.5 text-indigo-500" />{conversionRate < 15 ? "Your application→proposal rate is low. Refine CV versions per role and focus on higher match opportunities." : "Your proposal conversion looks healthy."}</li>
-          <li className="flex items-start gap-2"><ChartNoAxesCombined size={14} className="mt-0.5 text-indigo-500" />{(kpi?.overdue_over_3_weeks ?? 0) > 0 ? `You have ${kpi?.overdue_over_3_weeks} overdue applications; follow up to increase interview chances.` : "No overdue follow-ups right now."}</li>
-          <li className="flex items-start gap-2"><PieChart size={14} className="mt-0.5 text-indigo-500" />{last < prev ? "Your application volume dropped vs previous period. Aim for consistency this cycle." : "Application volume trend is stable or improving."}</li>
-        </ul>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <FunnelChart data={Array.from(statusMap, ([status, count]) => ({ status, count }))} />
-        <TrendChart data={trendData} label={`Applications by ${range}`} />
-        <PlatformsChart data={Array.from(platformMap, ([platform, count]) => ({ platform, count }))} />
-      </div>
+      </details>
     </div>
   );
 }

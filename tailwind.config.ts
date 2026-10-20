@@ -4,27 +4,28 @@ const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./lib/**/*.{js,ts,jsx,tsx,mdx}"
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        border: "hsl(214 32% 91%)",
-        background: "hsl(0 0% 100%)",
-        foreground: "hsl(220 26% 14%)",
+        border: "rgb(var(--border) / <alpha-value>)",
+        background: "rgb(var(--background) / <alpha-value>)",
+        foreground: "rgb(var(--foreground) / <alpha-value>)",
+        panel: "rgb(var(--panel) / <alpha-value>)",
         primary: {
-          DEFAULT: "hsl(244 74% 58%)",
-          foreground: "hsl(0 0% 100%)"
+          DEFAULT: "rgb(var(--primary) / <alpha-value>)",
+          foreground: "#fff",
         },
         muted: {
-          DEFAULT: "hsl(214 32% 96%)",
-          foreground: "hsl(220 9% 46%)"
+          DEFAULT: "rgb(var(--muted) / <alpha-value>)",
+          foreground: "rgb(var(--muted-foreground) / <alpha-value>)",
         },
-        danger: "hsl(0 84% 60%)"
-      }
-    }
+        danger: "rgb(var(--danger) / <alpha-value>)",
+      },
+    },
   },
-  plugins: []
+  plugins: [],
 };
 
 export default config;

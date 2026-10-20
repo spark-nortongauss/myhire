@@ -1,0 +1,21 @@
+begin;
+insert into auth.users(id,email) values ('10000000-0000-4000-8000-000000000001','myhire-rls-one@example.invalid'),('10000000-0000-4000-8000-000000000002','myhire-rls-two@example.invalid');
+insert into public.job_applications(id,user_id,job_title,company_name,job_url,applied_at,status) values ('20000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','Test','Test','',current_date,'applied'),('20000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000002','Test','Test','',current_date,'applied');
+insert into public.star_stories(id,user_id,title) values ('30000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','Owner story'),('30000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000002','Foreign story');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true);
+do $$ declare n integer; begin
+ select count(*) into n from public.star_stories; if n<>1 then raise exception 'RLS read failed';end if;
+ insert into public.job_star_stories(user_id,job_application_id,story_id) values(auth.uid(),'20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001');
+ begin insert into public.job_star_stories(user_id,job_application_id,story_id) values(auth.uid(),'20000000-0000-4000-8000-000000000002','30000000-0000-4000-8000-000000000001'); raise exception 'Foreign job linked'; exception when foreign_key_violation then null;end;
+ begin insert into public.job_star_stories(user_id,job_application_id,story_id) values(auth.uid(),'20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000002'); raise exception 'Foreign story linked'; exception when foreign_key_violation then null;end;
+ begin insert into public.job_actions(user_id,job_application_id,title) values(auth.uid(),'20000000-0000-4000-8000-000000000002','Cross-owner action');raise exception 'Foreign action accepted';exception when foreign_key_violation then null;end;
+ begin insert into public.job_interviews(user_id,job_application_id,interviewer,starts_at) values(auth.uid(),'20000000-0000-4000-8000-000000000002','Cross-owner interview',now());raise exception 'Foreign interview accepted';exception when foreign_key_violation then null;end;
+ begin update public.star_stories set user_id='10000000-0000-4000-8000-000000000002' where id='30000000-0000-4000-8000-000000000001';raise exception 'Owner reassigned';exception when insufficient_privilege then null;end;
+ update public.star_stories set title='Blocked' where id='30000000-0000-4000-8000-000000000002';get diagnostics n=row_count;if n<>0 then raise exception 'Foreign update allowed';end if;
+ begin update public.star_stories set status='ready' where id='30000000-0000-4000-8000-000000000001';raise exception 'Incomplete ready accepted';exception when check_violation then null;end;
+ if has_table_privilege('anon','public.star_stories','SELECT') then raise exception 'Anonymous read allowed';end if;
+end $$;
+reset role;
+rollback;
+select 'workspace ownership and validation tests passed; fixtures rolled back' as result;
