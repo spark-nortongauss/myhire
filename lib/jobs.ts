@@ -7,7 +7,10 @@ export function inferPlatform(url: string): Platform {
   const lower = url.toLowerCase();
   if (lower.includes("linkedin")) return "linkedin";
   if (lower.includes("indeed")) return "indeed";
-  if (lower.includes("wellfound") || lower.includes("angel.co")) return "wellfound";
+  if (lower.includes("apec.fr")) return "apec";
+  if (lower.includes("francetravail.fr")) return "france_travail";
+  if (lower.includes("welcometothejungle.com")) return "welcome_to_the_jungle";
+  if (lower.includes("glassdoor")) return "glassdoor";
   if (lower.includes("greenhouse") || lower.includes("lever")) return "other";
   return "other";
 }
@@ -34,8 +37,8 @@ export async function updateJobApplication(supabase: DBClient, userId: string, j
 
   const nextPayload = { ...payload };
   const urlValue = typeof nextPayload.job_url === "string" ? nextPayload.job_url.trim() : nextPayload.job_url;
-  if (typeof urlValue === "string" && urlValue.length > 2048) {
-    return { ok: false, error: "job_url is too long (max 2048 characters)" };
+  if (typeof urlValue === "string" && urlValue.length > 2000) {
+    return { ok: false, error: "job_url is too long (max 2000 characters)" };
   }
 
   const { error } = await supabase.from("job_applications").update(nextPayload).eq("id", jobId).eq("user_id", userId);

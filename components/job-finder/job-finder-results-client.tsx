@@ -6,7 +6,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 type SearchRow = {
   id: string;
-  query: string;
+  generated_query: string;
+  status: string;
+  error: string | null;
   country: string | null;
   language: string | null;
   location: string | null;
@@ -47,13 +49,15 @@ function toSafeExternalUrl(primary: string | null, fallback: string | null) {
 }
 
 export function JobFinderResultsClient({ search, results }: { search: SearchRow; results: ResultRow[] }) {
+  if (search.status === "failed") return <EmptyState title="Search failed" description={search.error || "Please retry the search."} />;
+  if (search.status === "processing") return <EmptyState title="Search in progress" description="Refresh this page shortly." />;
   if (!results.length) return <EmptyState title="No matching jobs found" description="Try broadening keywords, country, or date filters." />;
 
   return (
     <div className="space-y-4">
       <div className="card">
         <h1 className="flex items-center gap-2 text-2xl font-black"><Search size={20} />Job Finder Results</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{search.total_results ?? results.length} opportunities saved for query: <span className="font-semibold">{search.query}</span></p>
+        <p className="mt-2 text-sm text-muted-foreground">{search.total_results ?? results.length} opportunities saved for query: <span className="font-semibold">{search.generated_query}</span></p>
         <p className="mt-2 text-xs text-muted-foreground">Filters: {search.country || "-"} · {search.language || "-"} · {search.location || "Any location"} · {search.remote_only ? "Remote only" : "All work modes"} · {search.date_posted || "all"}</p>
       </div>
 
@@ -61,7 +65,7 @@ export function JobFinderResultsClient({ search, results }: { search: SearchRow;
         {results.map((job) => {
           const openUrl = toSafeExternalUrl(job.job_apply_link, job.job_google_link);
           const score = job.match_score ?? 0;
-          const matchTone = score >= 65 ? "Strong" : score >= 35 ? "Medium" : "Low";
+          const matchTone = score >= 80 ? "Strong" : score >= 55 ? "Medium" : "Low";
 
           return (
             <article key={job.id} className="card grid gap-2 md:grid-cols-[1fr_auto]">
@@ -77,7 +81,7 @@ export function JobFinderResultsClient({ search, results }: { search: SearchRow;
                 <p className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin size={12} />{job.job_location || "Location not provided"}</p>
                 <p className="text-xs text-muted-foreground">Posted: {job.job_posted_at || "Unknown"} · Salary: {job.job_salary || "Not listed"}</p>
                 <p className="line-clamp-3 text-sm text-slate-700">{(job.job_description || "No description provided").slice(0, 280)}</p>
-                <p className="text-xs font-semibold">Match: {score}% ({matchTone})</p>
+                <p className="text-xs font-semibold">Keyword match: {score}% ({matchTone})</p>
               </div>
               <div className="flex items-start justify-end">
                 {openUrl ? <a href={openUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white"><ExternalLink size={14} />See/Open</a> : <Button disabled>Link unavailable</Button>}

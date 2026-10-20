@@ -7,9 +7,6 @@ import { JOB_FINDER_DATE_POSTED, JOB_FINDER_EMPLOYMENT_TYPES, JOB_FINDER_REQUIRE
 
 const bodySchema = z.object({
   cvId: z.string().uuid(),
-  cvName: z.string().max(200).optional(),
-  cvSummary: z.string().max(8000).optional(),
-  cvSkills: z.string().max(8000).optional(),
   roleKeywords: z.string().min(2).max(240),
   country: z.string().trim().toUpperCase().length(2).optional().or(z.literal("")),
   language: z.string().trim().toUpperCase().min(2).max(5).optional().or(z.literal("")),
@@ -37,8 +34,11 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
 
   const body = parsed.data;
-  const cvSummary = body.cvSummary ?? "";
-  const cvSkills = body.cvSkills ?? "";
+  const { data: cv, error: cvError } = await supabase.from("user_cvs").select("parsed_text,parsed_skills").eq("id", body.cvId).eq("user_id", user.id).maybeSingle();
+  if (cvError || !cv) return NextResponse.json({ error: "CV profile not found in your account." }, { status: 404 });
+  if (!process.env.RAPIDAPI_KEY || !process.env.RAPIDAPI_HOST) return NextResponse.json({ error: "Job search provider is not configured." }, { status: 503 });
+  const cvSummary = cv.parsed_text ?? "";
+  const cvSkills = (cv.parsed_skills ?? []).join(", ");
   const finalQuery = buildJobFinderQuery(body.roleKeywords, cvSummary, cvSkills, body.location ?? "", Boolean(body.remoteOnly));
 
   const { data: searchRow, error: searchError } = await supabase
@@ -46,7 +46,9 @@ export async function POST(request: Request) {
     .insert({
       user_id: user.id,
       cv_id: body.cvId,
-      query: finalQuery,
+      keywords: body.roleKeywords,
+      generated_query: finalQuery,
+      status: "processing",
       country: body.country || null,
       language: body.language || null,
       location: body.location || null,
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
       employment_types: body.employmentTypes,
       job_requirements: body.jobRequirements,
       radius: body.radius ?? null,
-      exclude_job_publishers: body.excludeJobPublishers || null,
+      exclude_job_publishers: (body.excludeJobPublishers || "").split(",").map((item) => item.trim()).filter(Boolean),
       page: body.page,
       num_pages: body.numPages,
       total_results: 0
@@ -82,6 +84,7 @@ export async function POST(request: Request) {
     if (scored.length) {
       const { error: resultsError } = await supabase.from("job_finder_results").upsert(
         scored.map((job) => ({
+          user_id: user.id,
           search_id: searchRow.id,
           job_id_external: job.jobIdExternal,
           job_title: job.jobTitle,
@@ -117,14 +120,16 @@ export async function POST(request: Request) {
 
       if (resultsError) {
         console.error("job-finder results upsert failed", { code: resultsError.code, message: resultsError.message });
-        return NextResponse.json({ error: "Could not save results" }, { status: 500 });
+        throw new Error("Could not save results");
       }
     }
 
-    await supabase.from("job_finder_searches").update({ total_results: scored.length, updated_at: new Date().toISOString() }).eq("id", searchRow.id).eq("user_id", user.id);
+    const { error: completionError } = await supabase.from("job_finder_searches").update({ status: "completed", error: null, total_results: scored.length, updated_at: new Date().toISOString() }).eq("id", searchRow.id).eq("user_id", user.id);
+    if (completionError) throw new Error("Could not complete search");
 
     return NextResponse.json({ searchId: searchRow.id, totalResults: scored.length });
   } catch (error) {
+    await supabase.from("job_finder_searches").update({ status: "failed", error: "Search failed. Please retry." }).eq("id", searchRow.id).eq("user_id", user.id);
     console.error("job-finder api failed", { message: error instanceof Error ? error.message : "unknown" });
     return NextResponse.json({ error: "Job search failed. Please try again." }, { status: 502 });
   }

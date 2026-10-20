@@ -1,9 +1,7 @@
-import { enforceOverdueRejections } from "@/lib/actions/overdue";
 import { createClient } from "@/lib/supabase/server";
 import { JobsTable } from "@/components/jobs/jobs-table";
 
 export default async function JobsPage() {
-  await enforceOverdueRejections();
   const supabase = await createClient();
   const {
     data: { user }
