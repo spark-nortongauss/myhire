@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-const protectedRoutes = ["/dashboard", "/jobs", "/settings"];
+const protectedRoutes = ["/dashboard", "/jobs", "/settings", "/files", "/preparation", "/interview-prep", "/job-finder", "/cover-letter-generator"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -47,6 +47,8 @@ export async function middleware(request: NextRequest) {
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    url.searchParams.set("next", pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 
@@ -56,9 +58,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  response.headers.set("Cache-Control", "private, no-store");
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/jobs/:path*", "/settings/:path*", "/login"]
+  matcher: ["/dashboard/:path*", "/jobs/:path*", "/settings/:path*", "/files/:path*", "/preparation/:path*", "/interview-prep/:path*", "/job-finder/:path*", "/cover-letter-generator/:path*", "/login"]
 };

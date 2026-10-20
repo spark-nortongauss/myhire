@@ -3,7 +3,6 @@ import { Power } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/layout/app-shell";
-import { PageTransition } from "@/components/ui/page-transition";
 
 async function LogoutButton() {
   async function logout() {
@@ -17,19 +16,36 @@ async function LogoutButton() {
     <form action={logout}>
       <Button variant="ghost" className="w-full justify-start gap-2">
         <Power size={16} />
-        <span className="logout-label">Logout</span>
+        <span className="logout-label">Sair</span>
       </Button>
     </form>
   );
 }
 
-export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
+export default async function ProtectedLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const supabase = await createClient();
   const {
-    data: { user }
+    data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
 
-  return <AppShell logoutButton={<LogoutButton />}><PageTransition>{children}</PageTransition></AppShell>;
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  const name =
+    profile?.full_name?.split(" ")[0] ||
+    user.email?.split("@")[0] ||
+    "Minha conta";
+  return (
+    <AppShell name={name} logoutButton={<LogoutButton />}>
+      {children}
+    </AppShell>
+  );
 }

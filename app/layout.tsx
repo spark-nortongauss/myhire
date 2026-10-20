@@ -5,12 +5,12 @@ import { RouteProgress } from "@/components/ui/route-progress";
 
 export const metadata: Metadata = {
   title: "MyHire - Job Application Tracker",
-  description: "Track your job applications with Supabase + Vercel"
+  description: "Candidaturas, entrevistas e histórias. Tudo em um só lugar."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body><ToastProvider><RouteProgress />{children}</ToastProvider></body>
     </html>
   );
